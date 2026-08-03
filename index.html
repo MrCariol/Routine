@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<title>Le mie Routine</title>
+
+<meta name="description" content="Gestisci le tue routine quotidiane: task cronometrati, promemoria e progressi salvati solo su questo dispositivo.">
+<meta name="theme-color" content="#17A2B8">
+
+<!-- Icone / Windows 10 Mobile (Edge) tile e Add to Start -->
+<link rel="shortcut icon" href="icons/favicon.ico">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="msapplication-config" content="browserconfig.xml">
+<meta name="msapplication-TileColor" content="#17A2B8">
+<meta name="msapplication-TileImage" content="icons/tile-150.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Routine">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- Necessario per evitare che per una frazione di secondo si veda il testo
+     grezzo tipo "{{ importSuccess }}" prima che Vue finisca di caricarsi.
+     Non è una scelta di stile, è una correzione funzionale minima. -->
+<style>[v-cloak] { display: none; }</style>
+
+<!--
+  VERSIONE APP / CACHE-BUSTING
+  Il dispositivo tende a tenere i file vecchi in cache in modo aggressivo.
+  Per forzare il download della versione più recente di CSS e JS ad ogni
+  aggiornamento, basta cambiare QUESTO UNICO NUMERO qui sotto (es. incrementa
+  di 1, o usa la data del giorno) prima di ricaricare i file sul server.
+  Non serve modificare nient'altro: tutti i link/script sotto lo usano.
+-->
+<script>
+  var APP_VERSION = '2026080301';
+  var savedTheme = 'light';
+  try { savedTheme = window.localStorage.getItem('routineApp.theme') || 'light'; } catch (e) {}
+  document.write('<link id="theme-stylesheet" rel="stylesheet" href="css/' + (savedTheme === 'dark' ? 'bootstrap-dark.min.css' : 'bootstrap.min.css') + '?v=' + APP_VERSION + '">');
+  document.write('<link rel="stylesheet" href="css/materialdesignicons.min.css?v=' + APP_VERSION + '">');
+  document.write('<link id="dark-overrides-stylesheet" rel="stylesheet" href="css/dark-theme-overrides.css?v=' + APP_VERSION + '"' + (savedTheme === 'dark' ? '' : ' disabled') + '>');
+
+  // Registrazione service worker, solo dove supportato (assente su EdgeHTML 14:
+  // 'serviceWorker' non esiste in navigator, quindi qui non succede nulla).
+  // Necessario perché Chrome (Android) consideri l'app installabile ed emetta
+  // l'evento 'beforeinstallprompt' gestito in js/app.js.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js?v=' + APP_VERSION).catch(function () {});
+    });
+  }
+
+</script>
+</head>
+<body>
+
+<!-- Schermata di caricamento: pura HTML statica, visibile subito, senza
+     aspettare Vue. Viene rimossa non appena l'app e' pronta. -->
+<div id="app-loader" class="d-flex flex-column align-items-center justify-content-center" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#ffffff;z-index:2000;">
+  <div class="spinner-border text-primary mb-3" role="status" style="width:3rem;height:3rem;"><span class="sr-only">Caricamento...</span></div>
+  <div class="text-muted">Caricamento...</div>
+</div>
+
+<div id="app" v-cloak>
+
+  <!-- Modale di conferma condivisa: sostituisce window.confirm ovunque nell'app -->
+  <div class="modal" tabindex="-1" ref="confirmModal" style="z-index:1070;">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Conferma</h5>
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">{{ confirmMessage }}</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Annulla</button>
+          <button type="button" class="btn btn-danger" @click="runConfirmedAction">Conferma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale di conflitto sincronizzazione -->
+  <div class="modal" tabindex="-1" ref="syncConflictModal" style="z-index:1070;">
+    <div class="modal-dialog modal-dialog-centered" v-if="syncConflict">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Differenze trovate</h5>
+          <button type="button" class="close" @click="cancelSyncConflict" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p>Il backup sul server e i dati su questo dispositivo non coincidono. Quale versione vuoi tenere?</p>
+          <ul class="list-group mb-2">
+            <li class="list-group-item">
+              <strong>Questo dispositivo</strong>
+              <span class="badge badge-success ml-1" v-if="syncConflictNewer === 'local'">più recente</span><br>
+              <small class="text-muted">{{ syncConflict.localCount }} routine &middot; ultima modifica: {{ Store.formatDateTime(syncConflict.localModified) }}</small>
+            </li>
+            <li class="list-group-item">
+              <strong>Server</strong>
+              <span class="badge badge-success ml-1" v-if="syncConflictNewer === 'server'">più recente</span><br>
+              <small class="text-muted">{{ syncConflict.serverCount }} routine &middot; ultima modifica: {{ Store.formatDateTime(syncConflict.serverModified) }}</small>
+            </li>
+          </ul>
+          <p class="text-muted small mb-0">Qualunque cosa scegli, sovrascriverà completamente l'altra versione.</p>
+        </div>
+        <div class="modal-footer flex-column">
+          <button type="button" class="btn btn-primary btn-block" @click="resolveKeepLocal">Tieni questo dispositivo</button>
+          <button type="button" class="btn btn-secondary btn-block" @click="resolveKeepServer">Tieni il server</button>
+          <button type="button" class="btn btn-outline-secondary btn-block" @click="cancelSyncConflict" data-dismiss="modal">Annulla</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale informativa di sincronizzazione -->
+  <div class="modal" tabindex="-1" ref="syncInfoModal" style="z-index:1070;">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Sincronizzazione</h5>
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body" :class="syncInfoIsError ? 'text-danger' : ''">{{ syncInfoMessage }}</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" data-dismiss="modal">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale di invito all'installazione PWA: mostrata una sola volta (la
+       prima volta che il browser la ritiene installabile), poi mai piu'
+       (vedi Store.markInstallPromoSeen). Su EdgeHTML 14 'beforeinstallprompt'
+       non esiste mai, quindi qui non compare mai. -->
+  <div class="modal" tabindex="-1" ref="installPromoModal" style="z-index:1070;">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Installa l'app</h5>
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p>Puoi installare "Le mie Routine" su questo dispositivo: si aprir&agrave; come un'app a s&eacute; stante, con una sua icona, senza barra dell'indirizzo del browser.</p>
+          <p class="text-muted small mb-0">Puoi farlo anche in un secondo momento dal bottone <i class="mdi mdi-download"></i> qui sopra o dalle Impostazioni.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Non ora</button>
+          <button type="button" class="btn btn-primary" @click="installFromPromo">Installa</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== HOME ==================== -->
+  <template v-if="view === 'home'">
+    <div class="fixed-top d-flex align-items-center justify-content-between px-3 border-bottom" style="height:56px;z-index:1050;" :class="theme === 'dark' ? 'bg-dark text-light' : 'bg-white text-dark'">
+      <span class="h5 mb-0">Le mie Routine</span>
+      <div>
+        <button class="btn btn-primary mr-1" title="Nuova routine" @click="newRoutine"><i class="mdi mdi-plus"></i></button>
+        <button class="btn btn-outline-secondary mr-1" title="Installa l'app" v-if="canInstall" @click="installApp"><i class="mdi mdi-download"></i></button>
+        <button class="btn mr-1" :class="syncButtonState === 'warning' ? 'btn-warning' : 'btn-outline-secondary'" title="Sincronizza" @click="syncNow"><i class="mdi mdi-cloud-sync-outline"></i></button>
+        <button class="btn btn-outline-secondary" title="Impostazioni" @click="openSettings"><i class="mdi mdi-cog"></i></button>
+      </div>
+    </div>
+
+    <div class="container" style="padding-top:72px;padding-bottom:24px;">
+      <routine-list :routines="routines" @start="startRoutine" @edit="editRoutine" @delete="deleteRoutine"></routine-list>
+    </div>
+  </template>
+
+  <settings-page
+    v-if="view === 'settings'"
+    :theme="theme"
+    :can-install="canInstall"
+    :import-success="importSuccess"
+    :import-error="importError"
+    @back="closeSettings"
+    @install="installApp"
+    @toggle-theme="toggleTheme"
+    @export="exportData"
+    @import="triggerImport"
+    @dismiss-success="importSuccess=''"
+    @dismiss-error="importError=''">
+  </settings-page>
+
+  <input type="file" ref="importFile" accept="application/json,.json" style="display:none;" @change="handleImportFile">
+
+  <routine-edit-page
+    v-if="view === 'routine-edit'"
+    :routine="currentRoutineDraft"
+    :is-new="isRoutineNew"
+    @add-task="addTaskToRoutine"
+    @edit-task="editTaskInRoutine"
+    @changed="onRoutineDraftChanged"
+    @save="saveRoutineEdit"
+    @cancel="cancelRoutineEdit">
+  </routine-edit-page>
+
+  <task-edit-page
+    v-if="view === 'task-edit'"
+    :initial-task="currentTaskDraft"
+    :is-new="isTaskNew"
+    @save="saveTaskEdit"
+    @cancel="cancelTaskEdit">
+  </task-edit-page>
+
+  <execution-view
+    v-if="view === 'execution'"
+    :routine="routineToExecute"
+    :resume-session="resumeExecutionSession"
+    @finished="onRoutineFinished"
+    @stopped="onRoutineStopped">
+  </execution-view>
+
+  <summary-view
+    v-if="view === 'summary'"
+    :payload="routineSummaryPayload"
+    @close="closeSummary">
+  </summary-view>
+
+</div>
+
+<!-- Librerie (versioni compatibili ES5 / EdgeHTML 14) + App: tutte caricate con
+     ?v=APP_VERSION (impostato in cima all'head) per evitare che il dispositivo
+     tenga in cache una versione vecchia dopo un aggiornamento. -->
+<script>
+  function loadScript(src) {
+    document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>');
+  }
+  loadScript('js/jquery.min.js');
+  loadScript('js/bootstrap.bundle.min.js');
+  loadScript('js/vue.min.js');
+  loadScript('js/nosleep.min.js');
+  loadScript('js/store.js');
+  loadScript('js/models.js');
+  loadScript('js/sound.js');
+  loadScript('js/sync-wordlist.js');
+  loadScript('js/sync.js');
+  loadScript('js/icons-data.js');
+  loadScript('js/components/icon-picker.js');
+  loadScript('js/components/color-picker.js');
+  loadScript('js/components/duration-picker.js');
+  loadScript('js/components/task-editor.js');
+  loadScript('js/components/routine-editor.js');
+  loadScript('js/components/routine-list.js');
+  loadScript('js/components/execution.js');
+  loadScript('js/components/summary-view.js');
+  loadScript('js/components/settings-page.js');
+  loadScript('js/app.js');
+</script>
+</body>
+</html>

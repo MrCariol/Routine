@@ -1,0 +1,77 @@
+/*
+  Questo file viene caricato SOLO quando il tema scuro e' attivo (vedi
+  applyTheme() in app.js, che abilita/disabilita questo <link> tramite
+  la proprieta' .disabled). Non e' una scelta di stile: Bootswatch Darkly
+  usa per "secondary" e per i bordi un grigio troppo scuro, poco leggibile
+  su sfondo scuro. Qui lo schiariamo, senza toccare nient'altro.
+
+  Le regole OLED qui sotto sostituiscono lo sfondo grigio (#222/#303030) di
+  Darkly con nero puro #000000, per spegnere davvero i pixel su schermi OLED.
+  Le superfici "elevate" (card, header/footer fissi, modali, list-group)
+  restano leggermente piu' chiare (#1c1c1c, la stessa convenzione "true
+  black + surface" usata da Material Design), con un bordo (#3a3a3a)
+  esplicito: il bordo di default di Bootstrap per le card e' un grigio
+  quasi-nero (rgba(0,0,0,.125)), invisibile su sfondo nero.
+*/
+
+body {
+  background-color: #000000;
+}
+
+.bg-dark,
+.card,
+.modal-content,
+.list-group-item {
+  background-color: #1c1c1c !important;
+}
+.card,
+.modal-content,
+.list-group-item {
+  border-color: #3a3a3a !important;
+}
+
+/*
+  Darkly lascia bianchi puri gli input di testo/select e la casella non
+  spuntata di checkbox/switch: su sfondo nero il contrasto e' eccessivo.
+  Li scuriamo mantenendo il testo leggibile.
+*/
+.form-control,
+.custom-select,
+.custom-file-label {
+  color: #e9ecef;
+  background-color: #2a2a2a;
+  border-color: #444;
+}
+.form-control:focus,
+.custom-select:focus {
+  color: #e9ecef;
+  background-color: #2a2a2a;
+}
+.form-control::placeholder {
+  color: #888;
+}
+.form-control:disabled,
+.form-control[readonly] {
+  background-color: #1c1c1c;
+}
+.custom-control-label::before {
+  background-color: #2a2a2a;
+  border-color: #666;
+}
+
+.btn-outline-secondary {
+  color: #adb5bd;
+  border-color: #adb5bd;
+}
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus,
+.btn-outline-secondary:active {
+  color: #212529;
+  background-color: #adb5bd;
+  border-color: #adb5bd;
+}
+
+.border-top,
+.border-bottom {
+  border-color: #5c6570 !important;
+}

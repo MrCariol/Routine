@@ -1,0 +1,16 @@
+{
+  "name": "Le mie Routine",
+  "short_name": "Routine",
+  "description": "Gestisci le tue routine quotidiane con task cronometrati, salvati solo su questo dispositivo.",
+  "start_url": "https://ciccioneissima.altervista.org/routine/index.html",
+  "scope": "https://ciccioneissima.altervista.org/routine/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#17A2B8",
+  "lang": "it",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
