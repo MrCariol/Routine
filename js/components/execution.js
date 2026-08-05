@@ -153,10 +153,10 @@ Vue.component('execution-view', {
     },
     playThresholdSound: function (oldRemaining, newRemaining) {
       function crossedDown(threshold) { return oldRemaining > threshold && newRemaining <= threshold; }
-      if (crossedDown(300)) { RoutineSound.pattern(700, 5, 500, 0.5); return; }
-      if (crossedDown(120)) { RoutineSound.pattern(850, 2, 1000, 0.6); return; }
+      if (crossedDown(300)) { RoutineSound.pattern(700, 5, 500); return; }
+      if (crossedDown(120)) { RoutineSound.pattern(850, 2, 1000); return; }
       if (crossedDown(60)) { RoutineSound.tone(1000, 1000); return; }
-      if (crossedDown(0)) { RoutineSound.pattern(1300, 8, 2000, 0.5); return; }
+      if (crossedDown(0)) { RoutineSound.pattern(1300, 8, 2000); return; }
       if (newRemaining < 0 && oldRemaining < 0) {
         var oldMinutesOver = Math.floor(-oldRemaining / 60);
         var newMinutesOver = Math.floor(-newRemaining / 60);

@@ -46,15 +46,17 @@ window.RoutineSound = (function () {
     osc.stop(now + dur + 0.02);
   }
 
-  // Riproduce piu' bip distribuiti su una durata totale (es. 5 bip in 0.5s).
-  function pattern(freq, count, totalMs, dutyRatio) {
-    dutyRatio = dutyRatio || 0.5;
-    var slot = totalMs / count;
-    var onTime = slot * dutyRatio;
+  // Riproduce piu' bip distribuiti su una durata totale (es. 5 bip in 0.5s),
+  // con un silenzio tra un bip e il successivo pari alla durata del bip
+  // stesso. La durata totale resta invariata: il primo bip parte subito e
+  // l'ultimo termina esattamente alla fine di totalMs.
+  function pattern(freq, count, totalMs) {
+    if (count <= 1) { tone(freq, totalMs); return; }
+    var unit = totalMs / (2 * count - 1);
     for (var i = 0; i < count; i++) {
       (function (delay) {
-        setTimeout(function () { tone(freq, onTime); }, delay);
-      })(i * slot);
+        setTimeout(function () { tone(freq, unit); }, delay);
+      })(i * 2 * unit);
     }
   }
 
