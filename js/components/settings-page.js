@@ -8,7 +8,8 @@ Vue.component('settings-page', {
     theme: { type: String, required: true },
     canInstall: { type: Boolean, default: false },
     importSuccess: { type: String, default: '' },
-    importError: { type: String, default: '' }
+    importError: { type: String, default: '' },
+    voiceEnabled: { type: Boolean, default: true }
   },
   data: function () {
     return {
@@ -16,7 +17,8 @@ Vue.component('settings-page', {
       syncKeyValue: RoutineSync.getPassphrase(),
       lastSyncedAt: RoutineSync.getLastSyncedAt(),
       showKeyInput: false,
-      keyDraft: ''
+      keyDraft: '',
+      voiceSupported: !!(window.RoutineVoice && RoutineVoice.supported())
     };
   },
   computed: {
@@ -31,6 +33,7 @@ Vue.component('settings-page', {
     back: function () { this.$emit('back'); },
     doInstall: function () { this.$emit('install'); },
     toggleTheme: function () { this.$emit('toggle-theme'); },
+    toggleVoiceEnabled: function () { this.$emit('toggle-voice-enabled'); },
     doExport: function () { this.$emit('export'); },
     doImport: function () { this.$emit('import'); },
     dismissSuccess: function () { this.$emit('dismiss-success'); },
@@ -103,6 +106,16 @@ Vue.component('settings-page', {
               '<input type="checkbox" class="custom-control-input" id="themeSwitch" :checked="theme === \'dark\'" @change="toggleTheme">' +
               '<label class="custom-control-label" for="themeSwitch"></label>' +
             '</div>' +
+          '</li>' +
+          '<li class="list-group-item d-flex justify-content-between align-items-center">' +
+            '<span><i class="mdi mdi-account-voice mr-2"></i> Annunci vocali</span>' +
+            '<div class="custom-control custom-switch">' +
+              '<input type="checkbox" class="custom-control-input" id="voiceSwitch" :disabled="!voiceSupported" :checked="voiceEnabled" @change="toggleVoiceEnabled">' +
+              '<label class="custom-control-label" for="voiceSwitch"></label>' +
+            '</div>' +
+          '</li>' +
+          '<li class="list-group-item text-muted small" v-if="!voiceSupported">' +
+            'Il tuo dispositivo non supporta la sintesi vocale: verranno usati i bip.' +
           '</li>' +
           '<li class="list-group-item" style="cursor:pointer;" @click="doExport">' +
             '<i class="mdi mdi-download mr-2"></i> Esporta backup' +

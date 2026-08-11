@@ -8,11 +8,12 @@ var app = new Vue({
   data: {
     data: Store.load(),
     theme: Store.loadTheme(),
+    voiceEnabled: Store.loadVoiceEnabled(),
     importError: '',
     importSuccess: '',
 
     // Navigazione a schermate separate (routine/task/esecuzione/riepilogo)
-    view: 'home', // 'home' | 'settings' | 'routine-edit' | 'task-edit' | 'execution' | 'summary'
+    view: 'home', // 'home' | 'settings' | 'stats' | 'routine-edit' | 'task-edit' | 'execution' | 'summary'
     currentRoutineDraft: null,
     editingRoutineIndex: null,
     isRoutineNew: true,
@@ -100,6 +101,12 @@ var app = new Vue({
     },
     openSettings: function () { this.view = 'settings'; },
     closeSettings: function () { this.view = 'home'; },
+    toggleVoiceEnabled: function () {
+      this.voiceEnabled = !this.voiceEnabled;
+      Store.saveVoiceEnabled(this.voiceEnabled);
+    },
+    openStats: function () { this.view = 'stats'; },
+    closeStats: function () { this.view = 'home'; },
 
     installApp: function () {
       if (!this.deferredInstallPrompt) { return; }

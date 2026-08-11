@@ -34,7 +34,7 @@
   Non serve modificare nient'altro: tutti i link/script sotto lo usano.
 -->
 <script>
-  var APP_VERSION = '2026080305';
+  var APP_VERSION = '2026081101';
   var savedTheme = 'light';
   try { savedTheme = window.localStorage.getItem('routineApp.theme') || 'light'; } catch (e) {}
   document.write('<link id="theme-stylesheet" rel="stylesheet" href="css/' + (savedTheme === 'dark' ? 'bootstrap-dark.min.css' : 'bootstrap.min.css') + '?v=' + APP_VERSION + '">');
@@ -161,6 +161,7 @@
         <button class="btn btn-primary mr-1" title="Nuova routine" @click="newRoutine"><i class="mdi mdi-plus"></i></button>
         <button class="btn btn-outline-secondary mr-1" title="Installa l'app" v-if="canInstall" @click="installApp"><i class="mdi mdi-download"></i></button>
         <button class="btn mr-1" :class="syncButtonState === 'warning' ? 'btn-warning' : 'btn-outline-secondary'" title="Sincronizza" @click="syncNow"><i class="mdi mdi-cloud-sync-outline"></i></button>
+        <button class="btn btn-outline-secondary mr-1" title="Statistiche" @click="openStats"><i class="mdi mdi-chart-bar"></i></button>
         <button class="btn btn-outline-secondary" title="Impostazioni" @click="openSettings"><i class="mdi mdi-cog"></i></button>
       </div>
     </div>
@@ -176,14 +177,21 @@
     :can-install="canInstall"
     :import-success="importSuccess"
     :import-error="importError"
+    :voice-enabled="voiceEnabled"
     @back="closeSettings"
     @install="installApp"
     @toggle-theme="toggleTheme"
+    @toggle-voice-enabled="toggleVoiceEnabled"
     @export="exportData"
     @import="triggerImport"
     @dismiss-success="importSuccess=''"
     @dismiss-error="importError=''">
   </settings-page>
+
+  <stats-page
+    v-if="view === 'stats'"
+    @back="closeStats">
+  </stats-page>
 
   <input type="file" ref="importFile" accept="application/json,.json" style="display:none;" @change="handleImportFile">
 
@@ -236,6 +244,7 @@
   loadScript('js/store.js');
   loadScript('js/models.js');
   loadScript('js/sound.js');
+  loadScript('js/voice.js');
   loadScript('js/sync-wordlist.js');
   loadScript('js/sync.js');
   loadScript('js/icons-data.js');
@@ -248,6 +257,7 @@
   loadScript('js/components/execution.js');
   loadScript('js/components/summary-view.js');
   loadScript('js/components/settings-page.js');
+  loadScript('js/components/stats-page.js');
   loadScript('js/app.js');
 </script>
 </body>

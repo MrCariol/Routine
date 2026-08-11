@@ -118,8 +118,36 @@ Vue.component('execution-view', {
         routineName: routine.name,
         tasks: clonedTasks,
         currentIndex: 0,
-        paused: false
+        paused: false,
+        soundMode: this.resolveSoundMode(routine)
       };
+    },
+    // Risolve la modalita' audio effettiva per la routine: 'voice' | 'beep' | 'none'.
+    // 'voice'/'beep' espliciti sulla routine forzano quella modalita' (con
+    // fallback automatico a 'beep' se la voce non e' supportata); 'default'
+    // (o assente) usa l'impostazione globale delle Impostazioni.
+    resolveSoundMode: function (routine) {
+      var mode = (routine && routine.soundMode) || 'default';
+      if (mode === 'none' || mode === 'beep') { return mode; }
+      if (mode === 'voice') { return (window.RoutineVoice && RoutineVoice.supported()) ? 'voice' : 'beep'; }
+      if (!Store.loadVoiceEnabled()) { return 'beep'; }
+      return (window.RoutineVoice && RoutineVoice.supported()) ? 'voice' : 'beep';
+    },
+    // Annuncia il nome del task che sta per iniziare (in modalita' voce).
+    // "append" (vedi RoutineVoice.speak) evita di tagliare un annuncio di
+    // soglia gia' in corso (es. "Tempo scaduto, passa a X" seguito subito
+    // dopo dal nome del task che parte). Il piccolo ritardo evita di
+    // chiamare speak() due volte nello stesso istante sincrono insieme a
+    // un'altra chiamata (es. RoutineVoice.unlock() sul primo task, o
+    // l'annuncio di soglia in caso di autoComplete): su diversi browser
+    // mobile la seconda chiamata "a ridosso" della prima viene scartata
+    // silenziosamente invece di essere accodata.
+    announceTaskStart: function () {
+      if (!this.session || this.session.soundMode !== 'voice') { return; }
+      var t = this.currentTask;
+      if (!t) { return; }
+      var name = t.name;
+      setTimeout(function () { RoutineVoice.speak(name, true); }, 400);
     },
     startTimer: function () {
       var self = this;
@@ -151,16 +179,33 @@ Vue.component('execution-view', {
       }
       this.persist();
     },
+    // Annuncia una soglia con voce o bip, in base a session.soundMode.
+    // beepFn: funzione che riproduce il pattern di bip. text: frase da
+    // annunciare in modalita' voce.
+    announce: function (mode, beepFn, text) {
+      if (mode === 'none') { return; }
+      if (mode === 'voice') { RoutineVoice.speak(text); return; }
+      beepFn();
+    },
     playThresholdSound: function (oldRemaining, newRemaining) {
+      var mode = this.session.soundMode || 'beep';
+      var self = this;
       function crossedDown(threshold) { return oldRemaining > threshold && newRemaining <= threshold; }
-      if (crossedDown(300)) { RoutineSound.pattern(700, 5, 500); return; }
-      if (crossedDown(120)) { RoutineSound.pattern(850, 2, 1000); return; }
-      if (crossedDown(60)) { RoutineSound.tone(1000, 1000); return; }
-      if (crossedDown(0)) { RoutineSound.pattern(1300, 8, 2000); return; }
+      if (crossedDown(300)) { self.announce(mode, function () { RoutineSound.pattern(700, 3, 1000); }, 'Mancano 5 minuti'); return; }
+      if (crossedDown(120)) { self.announce(mode, function () { RoutineSound.pattern(850, 2, 1000); }, 'Mancano 2 minuti'); return; }
+      if (crossedDown(60)) { self.announce(mode, function () { RoutineSound.tone(1000, 1000); }, 'Manca 1 minuto'); return; }
+      if (crossedDown(0)) {
+        var text = 'Tempo scaduto' + (this.nextTask ? ', passa a ' + this.nextTask.name : ', routine completata');
+        self.announce(mode, function () { RoutineSound.pattern(1300, 8, 2000); }, text);
+        return;
+      }
       if (newRemaining < 0 && oldRemaining < 0) {
         var oldMinutesOver = Math.floor(-oldRemaining / 60);
         var newMinutesOver = Math.floor(-newRemaining / 60);
-        if (newMinutesOver > oldMinutesOver) { RoutineSound.tone(1000, 1000); }
+        if (newMinutesOver > oldMinutesOver) {
+          var overText = newMinutesOver === 1 ? '1 minuto di ritardo' : (newMinutesOver + ' minuti di ritardo');
+          self.announce(mode, function () { RoutineSound.pattern(1000, 3, 2000); }, overText);
+        }
       }
     },
     onVisibilityChange: function () {
@@ -182,6 +227,7 @@ Vue.component('execution-view', {
       this.session.currentIndex -= 1;
       this.session.tasks[this.session.currentIndex].status = 'pending';
       this.persist();
+      this.announceTaskStart();
     },
     advance: function (status) {
       if (!this.session) { return; }
@@ -192,15 +238,17 @@ Vue.component('execution-view', {
       }
       this.session.currentIndex += 1;
       this.persist();
+      this.announceTaskStart();
     },
     finish: function () {
       var tasksSummary = this.session.tasks.map(function (t) {
         return {
           id: t.id, name: t.name, icon: t.icon, color: t.color,
-          status: t.status, elapsedSeconds: t.elapsedSeconds
+          status: t.status, elapsedSeconds: t.elapsedSeconds, totalSeconds: t.totalSeconds
         };
       });
       var totalElapsed = tasksSummary.reduce(function (sum, t) { return sum + t.elapsedSeconds; }, 0);
+      Store.recordExecution(this.session.routineId, this.session.routineName, tasksSummary);
       Store.saveExecution(null);
       this.$emit('finished', {
         routineName: this.session.routineName,
@@ -211,6 +259,7 @@ Vue.component('execution-view', {
     stopRoutine: function () {
       var self = this;
       this.$root.askConfirm('Fermare completamente la routine corrente? I progressi di questa sessione andranno persi.', function () {
+        Store.recordExecution(self.session.routineId, self.session.routineName, self.session.tasks);
         Store.saveExecution(null);
         self.$emit('stopped');
       });
@@ -244,23 +293,27 @@ Vue.component('execution-view', {
         if (typeof t.elapsedSeconds !== 'number') { t.elapsedSeconds = t.totalSeconds - t.remainingSeconds; }
         if (!t.status) { t.status = 'pending'; }
       });
+      if (!s.soundMode) { s.soundMode = this.resolveSoundMode(null); }
       this.session = s;
     } else if (this.routine) {
-      if (window.RoutineSound) {
-        RoutineSound.unlock();
-        RoutineSound.tone(600, 100);
-      }
+      if (window.RoutineSound) { RoutineSound.unlock(); }
+      if (window.RoutineVoice) { RoutineVoice.unlock(); }
+      var mode = this.resolveSoundMode(this.routine);
+      if (mode === 'beep' && window.RoutineSound) { RoutineSound.tone(600, 100); }
       this.session = this.buildSessionFromRoutine(this.routine);
       this.persist();
+      this.announceTaskStart();
     }
     if (this.session) {
       this.startTimer();
       if (window.appNoSleep) { try { window.appNoSleep.enable(); } catch (e) {} }
       this._visibilityHandler = this.onVisibilityChange.bind(this);
       document.addEventListener('visibilitychange', this._visibilityHandler);
+      if (this.session.soundMode === 'voice' && window.RoutineVoice) { RoutineVoice.startKeepAlive(); }
     }
   },
   beforeDestroy: function () {
+    if (window.RoutineVoice) { RoutineVoice.stopKeepAlive(); }
     if (this.timerHandle) { clearInterval(this.timerHandle); }
     if (this._visibilityHandler) { document.removeEventListener('visibilitychange', this._visibilityHandler); }
     if (window.appNoSleep) { try { window.appNoSleep.disable(); } catch (e) {} }

@@ -29,6 +29,7 @@ var Models = {
       name: '',
       timeMode: 'none', // 'none' | 'start' | 'end'
       timeValue: '07:00',
+      soundMode: 'default', // 'default' | 'voice' | 'beep' | 'none'
       tasks: []
     };
   },

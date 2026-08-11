@@ -50,6 +50,7 @@ Vue.component('routine-edit-page', {
   created: function () {
     this.Store = Store;
     this.Models = Models;
+    if (!this.routine.soundMode) { this.routine.soundMode = 'default'; }
   },
   template:
     '<div>' +
@@ -84,6 +85,16 @@ Vue.component('routine-edit-page', {
             'Inizio: <strong>{{ computedTimes.start || "--:--" }}</strong> &nbsp;&middot;&nbsp; Fine: <strong>{{ computedTimes.end || "--:--" }}</strong>' +
           '</small>' +
           '<small class="form-text text-muted" v-else>La routine andra\' avviata manualmente, senza orario di riferimento.</small>' +
+        '</div>' +
+
+        '<div class="form-group">' +
+          '<label class="font-weight-bold">Suoni durante l\'esecuzione</label>' +
+          '<select class="form-control" v-model="routine.soundMode">' +
+            '<option value="default">Predefinito (usa le impostazioni)</option>' +
+            '<option value="voice">Voce</option>' +
+            '<option value="beep">Bip</option>' +
+            '<option value="none">Nessun suono</option>' +
+          '</select>' +
         '</div>' +
 
         '<button type="button" class="btn btn-primary btn-lg btn-block mb-3" :disabled="!isValid" @click="save">Salva routine</button>' +

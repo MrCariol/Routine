@@ -8,6 +8,9 @@ var THEME_KEY = 'routineApp.theme';
 var EXEC_KEY = 'routineApp.execution.v1';
 var LOCAL_MODIFIED_KEY = 'routineApp.localModified';
 var INSTALL_PROMO_KEY = 'routineApp.installPromoSeen';
+var VOICE_KEY = 'routineApp.voiceEnabled';
+var STATS_KEY = 'routineApp.stats.v1';
+var STATS_RETENTION_DAYS = 730;
 
 // 16 colori pensati per restare leggibili sia su tema chiaro che scuro
 var ICON_COLORS = [
@@ -42,6 +45,16 @@ function nowHHMM() {
 
 function defaultData() {
   return { routines: [] };
+}
+
+function defaultStats() {
+  return { routines: {} };
+}
+
+function todayDateStr() {
+  var d = new Date();
+  var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 }
 
 var Store = {
@@ -142,6 +155,86 @@ var Store = {
   },
   markInstallPromoSeen: function () {
     try { window.localStorage.setItem(INSTALL_PROMO_KEY, '1'); } catch (e) {}
+  },
+
+  // ---- Annunci vocali (impostazione globale) ------------------------------
+  loadVoiceEnabled: function () {
+    try {
+      var v = window.localStorage.getItem(VOICE_KEY);
+      return v === null ? true : v === '1';
+    } catch (e) { return true; }
+  },
+  saveVoiceEnabled: function (enabled) {
+    try { window.localStorage.setItem(VOICE_KEY, enabled ? '1' : '0'); } catch (e) {}
+  },
+
+  // ---- Statistiche esecuzioni, aggregate per giorno -----------------------
+  // Una routine e' pensata per essere svolta una volta al giorno: se viene
+  // svolta piu' volte lo stesso giorno i tempi si sommano nella entry di
+  // quel giorno, invece di tenere un log per singola esecuzione.
+  todayDateStr: todayDateStr,
+
+  loadStats: function () {
+    try {
+      var raw = window.localStorage.getItem(STATS_KEY);
+      if (!raw) { return defaultStats(); }
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.routines) { return defaultStats(); }
+      return parsed;
+    } catch (e) { return defaultStats(); }
+  },
+
+  saveStats: function (stats) {
+    try {
+      window.localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+      return true;
+    } catch (e) { return false; }
+  },
+
+  // Registra un'esecuzione (completata o interrotta) di una routine.
+  // tasks: array di { id, name, status ('completed'|'skipped'|'pending'),
+  // elapsedSeconds, totalSeconds }. Il tempo dei task saltati viene
+  // ignorato; i task mai raggiunti (status 'pending') non contano ne'
+  // come completati ne' come saltati.
+  recordExecution: function (routineId, routineName, tasks) {
+    var hasCompleted = tasks.some(function (t) { return t.status === 'completed'; });
+    if (!hasCompleted) { return; }
+
+    var stats = this.loadStats();
+    var dateStr = todayDateStr();
+
+    if (!stats.routines[routineId]) { stats.routines[routineId] = { name: routineName, days: {} }; }
+    var routineStats = stats.routines[routineId];
+    routineStats.name = routineName;
+
+    if (!routineStats.days[dateStr]) { routineStats.days[dateStr] = { totalSeconds: 0, executionsCount: 0, tasks: {} }; }
+    var day = routineStats.days[dateStr];
+    day.executionsCount += 1;
+
+    tasks.forEach(function (t) {
+      if (t.status !== 'completed' && t.status !== 'skipped') { return; }
+      if (!day.tasks[t.id]) {
+        day.tasks[t.id] = { name: t.name, completedSeconds: 0, completedCount: 0, estimatedSecondsSum: 0, skippedCount: 0 };
+      }
+      var taskStats = day.tasks[t.id];
+      taskStats.name = t.name;
+      if (t.status === 'completed') {
+        day.totalSeconds += t.elapsedSeconds;
+        taskStats.completedSeconds += t.elapsedSeconds;
+        taskStats.completedCount += 1;
+        taskStats.estimatedSecondsSum += (t.totalSeconds || 0);
+      } else {
+        taskStats.skippedCount += 1;
+      }
+    });
+
+    // Limita la crescita nel tempo: scarta i giorni troppo vecchi.
+    var cutoff = Date.now() - STATS_RETENTION_DAYS * 86400000;
+    Object.keys(routineStats.days).forEach(function (d) {
+      if (new Date(d).getTime() < cutoff) { delete routineStats.days[d]; }
+    });
+
+    this.saveStats(stats);
   },
 
   // ---- Utility tempo -------------------------------------------------------
