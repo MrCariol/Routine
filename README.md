@@ -84,6 +84,7 @@ Tutto salvato in `localStorage` sotto la chiave `routineApp.data.v1` come `{ rou
 - Modali di conferma personalizzate al posto di `window.confirm`
 - Cache-busting manuale via singola variabile `APP_VERSION` in `index.html`
 - PWA installabile (manifest + icone), pensata anche per dispositivi datati (Windows 10 Mobile/Edge, da cui il vincolo di compatibilità ES5 e l'assenza di build tool)
+- Funzionamento offline (service worker `sw.js`, runtime caching): tutte le funzionalità eccetto la sincronizzazione online funzionano senza connessione; quando torna la rete, HTML/manifest/icone vengono ricontrollati subito (network-first), mentre CSS/JS/font versionati (`?v=...`) restano cache-first perché immutabili per costruzione
 
 ## Note di sicurezza rilevanti
 

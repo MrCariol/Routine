@@ -7,15 +7,12 @@
 <title>Le mie Routine</title>
 
 <meta name="description" content="Gestisci le tue routine quotidiane: task cronometrati, promemoria e progressi salvati solo su questo dispositivo.">
-<meta name="theme-color" content="#17A2B8">
+<meta name="theme-color" content="#4FA8A0">
 
 <!-- Icone / Windows 10 Mobile (Edge) tile e Add to Start -->
-<link rel="shortcut icon" href="icons/favicon.ico">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="msapplication-config" content="browserconfig.xml">
-<meta name="msapplication-TileColor" content="#17A2B8">
-<meta name="msapplication-TileImage" content="icons/tile-150.png">
+<meta name="msapplication-TileColor" content="#4FA8A0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Routine">
 <meta name="mobile-web-app-capable" content="yes">
@@ -34,17 +31,31 @@
   Non serve modificare nient'altro: tutti i link/script sotto lo usano.
 -->
 <script>
-  var APP_VERSION = '2026081101';
+  var APP_VERSION = '2026081301';
   var savedTheme = 'light';
   try { savedTheme = window.localStorage.getItem('routineApp.theme') || 'light'; } catch (e) {}
   document.write('<link id="theme-stylesheet" rel="stylesheet" href="css/' + (savedTheme === 'dark' ? 'bootstrap-dark.min.css' : 'bootstrap.min.css') + '?v=' + APP_VERSION + '">');
   document.write('<link rel="stylesheet" href="css/materialdesignicons.min.css?v=' + APP_VERSION + '">');
   document.write('<link id="dark-overrides-stylesheet" rel="stylesheet" href="css/dark-theme-overrides.css?v=' + APP_VERSION + '"' + (savedTheme === 'dark' ? '' : ' disabled') + '>');
 
+  // Favicon/apple-touch-icon versionati come CSS/JS: alcuni browser (in
+  // particolare la richiesta dell'icona del tab su Chrome) possono bypassare
+  // il service worker per queste risorse, quindi qui il cache-busting via
+  // URL e' l'unica garanzia di vedere sempre l'icona aggiornata.
+  // Favicon principale: PNG ad alta risoluzione (i browser moderni
+  // preferiscono rel="icon" a rel="shortcut icon" quando entrambi sono
+  // presenti). Il .ico resta solo come fallback per i browser che non
+  // capiscono affatto rel="icon" (es. EdgeHTML 14).
+  document.write('<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512-v2.png?v=' + APP_VERSION + '">');
+  document.write('<link rel="shortcut icon" href="icons/favicon.ico?v=' + APP_VERSION + '">');
+  document.write('<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=' + APP_VERSION + '">');
+  document.write('<meta name="msapplication-TileImage" content="icons/tile-150.png?v=' + APP_VERSION + '">');
+
   // Registrazione service worker, solo dove supportato (assente su EdgeHTML 14:
-  // 'serviceWorker' non esiste in navigator, quindi qui non succede nulla).
-  // Necessario perché Chrome (Android) consideri l'app installabile ed emetta
-  // l'evento 'beforeinstallprompt' gestito in js/app.js.
+  // 'serviceWorker' non esiste in navigator, quindi qui non succede nulla,
+  // l'app resta comunque utilizzabile ma senza funzionamento offline).
+  // Necessario sia per l'installabilità PWA (evento 'beforeinstallprompt' in
+  // js/app.js) sia per il funzionamento offline gestito da sw.js.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js?v=' + APP_VERSION).catch(function () {});
