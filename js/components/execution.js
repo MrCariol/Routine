@@ -149,6 +149,17 @@ Vue.component('execution-view', {
       var name = t.name;
       setTimeout(function () { RoutineVoice.speak(name, true); }, 400);
     },
+    // Aggiorna la notifica di sistema (se l'utente l'ha attivata dalle
+    // Impostazioni) col task corrente e il suo orario di fine. Non e' un
+    // countdown live (vedi commento in notify.js): mostra un orario fisso,
+    // cosi' resta corretto anche se non arrivano altri aggiornamenti mentre
+    // l'app e' in background.
+    updateNotification: function () {
+      if (!window.RoutineNotify || !Store.loadNotifyEnabled()) { return; }
+      var t = this.currentTask;
+      if (!t || !this.session) { return; }
+      RoutineNotify.show(t.name, this.session.routineName + ' · termina alle ' + this.fmtTime(this.currentTaskEndDate));
+    },
     startTimer: function () {
       var self = this;
       this.lastTickAt = Date.now();
@@ -228,6 +239,7 @@ Vue.component('execution-view', {
       this.session.tasks[this.session.currentIndex].status = 'pending';
       this.persist();
       this.announceTaskStart();
+      this.updateNotification();
     },
     advance: function (status) {
       if (!this.session) { return; }
@@ -239,6 +251,7 @@ Vue.component('execution-view', {
       this.session.currentIndex += 1;
       this.persist();
       this.announceTaskStart();
+      this.updateNotification();
     },
     finish: function () {
       var tasksSummary = this.session.tasks.map(function (t) {
@@ -250,6 +263,7 @@ Vue.component('execution-view', {
       var totalElapsed = tasksSummary.reduce(function (sum, t) { return sum + t.elapsedSeconds; }, 0);
       Store.recordExecution(this.session.routineId, this.session.routineName, tasksSummary);
       Store.saveExecution(null);
+      if (window.RoutineNotify) { RoutineNotify.close(); }
       this.$emit('finished', {
         routineName: this.session.routineName,
         totalElapsedSeconds: totalElapsed,
@@ -261,6 +275,7 @@ Vue.component('execution-view', {
       this.$root.askConfirm('Fermare completamente la routine corrente? I progressi di questa sessione andranno persi.', function () {
         Store.recordExecution(self.session.routineId, self.session.routineName, self.session.tasks);
         Store.saveExecution(null);
+        if (window.RoutineNotify) { RoutineNotify.close(); }
         self.$emit('stopped');
       });
     },
@@ -295,6 +310,7 @@ Vue.component('execution-view', {
       });
       if (!s.soundMode) { s.soundMode = this.resolveSoundMode(null); }
       this.session = s;
+      this.updateNotification();
     } else if (this.routine) {
       if (window.RoutineSound) { RoutineSound.unlock(); }
       if (window.RoutineVoice) { RoutineVoice.unlock(); }
@@ -303,6 +319,7 @@ Vue.component('execution-view', {
       this.session = this.buildSessionFromRoutine(this.routine);
       this.persist();
       this.announceTaskStart();
+      this.updateNotification();
     }
     if (this.session) {
       this.startTimer();

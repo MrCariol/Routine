@@ -9,6 +9,7 @@ var EXEC_KEY = 'routineApp.execution.v1';
 var LOCAL_MODIFIED_KEY = 'routineApp.localModified';
 var INSTALL_PROMO_KEY = 'routineApp.installPromoSeen';
 var VOICE_KEY = 'routineApp.voiceEnabled';
+var NOTIFY_KEY = 'routineApp.notifyEnabled';
 var STATS_KEY = 'routineApp.stats.v1';
 var STATS_RETENTION_DAYS = 730;
 
@@ -166,6 +167,14 @@ var Store = {
   },
   saveVoiceEnabled: function (enabled) {
     try { window.localStorage.setItem(VOICE_KEY, enabled ? '1' : '0'); } catch (e) {}
+  },
+
+  // ---- Notifica di sistema durante l'esecuzione (opt-in, richiede permesso) --
+  loadNotifyEnabled: function () {
+    try { return window.localStorage.getItem(NOTIFY_KEY) === '1'; } catch (e) { return false; }
+  },
+  saveNotifyEnabled: function (enabled) {
+    try { window.localStorage.setItem(NOTIFY_KEY, enabled ? '1' : '0'); } catch (e) {}
   },
 
   // ---- Statistiche esecuzioni, aggregate per giorno -----------------------

@@ -31,7 +31,7 @@
   Non serve modificare nient'altro: tutti i link/script sotto lo usano.
 -->
 <script>
-  var APP_VERSION = '2026081301';
+  var APP_VERSION = '2026081303';
   var savedTheme = 'light';
   try { savedTheme = window.localStorage.getItem('routineApp.theme') || 'light'; } catch (e) {}
   document.write('<link id="theme-stylesheet" rel="stylesheet" href="css/' + (savedTheme === 'dark' ? 'bootstrap-dark.min.css' : 'bootstrap.min.css') + '?v=' + APP_VERSION + '">');
@@ -189,10 +189,12 @@
     :import-success="importSuccess"
     :import-error="importError"
     :voice-enabled="voiceEnabled"
+    :notify-enabled="notifyEnabled"
     @back="closeSettings"
     @install="installApp"
     @toggle-theme="toggleTheme"
     @toggle-voice-enabled="toggleVoiceEnabled"
+    @toggle-notify-enabled="toggleNotifyEnabled"
     @export="exportData"
     @import="triggerImport"
     @dismiss-success="importSuccess=''"
@@ -256,6 +258,7 @@
   loadScript('js/models.js');
   loadScript('js/sound.js');
   loadScript('js/voice.js');
+  loadScript('js/notify.js');
   loadScript('js/sync-wordlist.js');
   loadScript('js/sync.js');
   loadScript('js/icons-data.js');

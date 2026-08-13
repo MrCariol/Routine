@@ -9,6 +9,7 @@ var app = new Vue({
     data: Store.load(),
     theme: Store.loadTheme(),
     voiceEnabled: Store.loadVoiceEnabled(),
+    notifyEnabled: Store.loadNotifyEnabled(),
     importError: '',
     importSuccess: '',
 
@@ -104,6 +105,12 @@ var app = new Vue({
     toggleVoiceEnabled: function () {
       this.voiceEnabled = !this.voiceEnabled;
       Store.saveVoiceEnabled(this.voiceEnabled);
+    },
+    // "enabled" arriva gia' risolto da settings-page (dopo l'eventuale
+    // richiesta del permesso al browser): qui salviamo solo il risultato.
+    toggleNotifyEnabled: function (enabled) {
+      this.notifyEnabled = enabled;
+      Store.saveNotifyEnabled(enabled);
     },
     openStats: function () { this.view = 'stats'; },
     closeStats: function () { this.view = 'home'; },

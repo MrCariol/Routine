@@ -9,7 +9,8 @@ Vue.component('settings-page', {
     canInstall: { type: Boolean, default: false },
     importSuccess: { type: String, default: '' },
     importError: { type: String, default: '' },
-    voiceEnabled: { type: Boolean, default: true }
+    voiceEnabled: { type: Boolean, default: true },
+    notifyEnabled: { type: Boolean, default: false }
   },
   data: function () {
     return {
@@ -18,7 +19,9 @@ Vue.component('settings-page', {
       lastSyncedAt: RoutineSync.getLastSyncedAt(),
       showKeyInput: false,
       keyDraft: '',
-      voiceSupported: !!(window.RoutineVoice && RoutineVoice.supported())
+      voiceSupported: !!(window.RoutineVoice && RoutineVoice.supported()),
+      notifySupported: !!(window.RoutineNotify && RoutineNotify.supported()),
+      notifyPermission: window.RoutineNotify ? RoutineNotify.permission() : 'unsupported'
     };
   },
   computed: {
@@ -34,6 +37,20 @@ Vue.component('settings-page', {
     doInstall: function () { this.$emit('install'); },
     toggleTheme: function () { this.$emit('toggle-theme'); },
     toggleVoiceEnabled: function () { this.$emit('toggle-voice-enabled'); },
+    // Se si sta accendendo e il permesso non e' ancora stato concesso, lo
+    // richiede al browser (deve avvenire durante questo stesso tocco
+    // dell'utente). Se l'utente nega, l'interruttore resta/torna spento.
+    toggleNotifyEnabled: function () {
+      var self = this;
+      if (this.notifyEnabled) {
+        this.$emit('toggle-notify-enabled', false);
+        return;
+      }
+      RoutineNotify.requestPermission(function (granted) {
+        self.notifyPermission = RoutineNotify.permission();
+        self.$emit('toggle-notify-enabled', granted);
+      });
+    },
     doExport: function () { this.$emit('export'); },
     doImport: function () { this.$emit('import'); },
     dismissSuccess: function () { this.$emit('dismiss-success'); },
@@ -116,6 +133,22 @@ Vue.component('settings-page', {
           '</li>' +
           '<li class="list-group-item text-muted small" v-if="!voiceSupported">' +
             'Il tuo dispositivo non supporta la sintesi vocale: verranno usati i bip.' +
+          '</li>' +
+          '<li class="list-group-item d-flex justify-content-between align-items-center">' +
+            '<span><i class="mdi mdi-bell-outline mr-2"></i> Notifica durante l\'esecuzione</span>' +
+            '<div class="custom-control custom-switch">' +
+              '<input type="checkbox" class="custom-control-input" id="notifySwitch" :disabled="!notifySupported || notifyPermission === \'denied\'" :checked="notifyEnabled" @change="toggleNotifyEnabled">' +
+              '<label class="custom-control-label" for="notifySwitch"></label>' +
+            '</div>' +
+          '</li>' +
+          '<li class="list-group-item text-muted small" v-if="!notifySupported">' +
+            'Il tuo dispositivo non supporta le notifiche.' +
+          '</li>' +
+          '<li class="list-group-item text-muted small" v-else-if="notifyPermission === \'denied\'">' +
+            'Hai bloccato le notifiche per questo sito: per attivarle, riabilitale dalle impostazioni del browser.' +
+          '</li>' +
+          '<li class="list-group-item text-muted small" v-else>' +
+            'Mostra il task corrente e l\'orario di fine; non e\' un timer live (i browser sospendono gli aggiornamenti in background).' +
           '</li>' +
           '<li class="list-group-item" style="cursor:pointer;" @click="doExport">' +
             '<i class="mdi mdi-download mr-2"></i> Esporta backup' +
