@@ -14,6 +14,20 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
+// CORS: il dominio del server e' configurabile lato client (vedi
+// Impostazioni > Sincronizzazione online / js/sync.js), quindi la richiesta
+// e' spesso cross-origin (in particolare dal wrapper nativo Capacitor, che
+// non ha comunque un'origine http coincidente con nessun server). Non e'
+// un indebolimento della sicurezza rispetto a oggi: il modello e' gia'
+// "chi conosce la passphrase ha accesso", non basato su same-origin.
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
 function respond($statusCode, $payload) {
     http_response_code($statusCode);
     echo json_encode($payload);

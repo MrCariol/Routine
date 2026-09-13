@@ -10,7 +10,7 @@ Web app (PWA) per la gestione di routine quotidiane con task cronometrati. Front
 - Nessun build step: JS caricato come script separati via `document.write` con cache-busting manuale (`APP_VERSION` in `index.html`)
 - Persistenza principale: `localStorage` del dispositivo (nessun database lato client)
 - Backend: un unico endpoint PHP (`api/sync.php`) per sync/backup opzionale, con storage su file system
-- Manifest PWA configurato per l'host `ciccioneissima.altervista.org`
+- Manifest PWA con percorsi relativi (`start_url`/`scope`): portabile su qualunque host serva l'app, nessun dominio hardcoded
 - Target dichiarato in `index.html`: compatibilità con EdgeHTML 14 (Windows 10 Mobile / Lumia), confermato anche nei commenti di `.htaccess`
 
 ## Struttura file
@@ -73,6 +73,7 @@ Tutto salvato in `localStorage` sotto la chiave `routineApp.data.v1` come `{ rou
 ### Backup e sincronizzazione
 - **Export/Import manuale**: scarica/carica un file JSON con tutte le routine (l'import sovrascrive tutto, con conferma)
 - **Sync online opzionale**: basata su una passphrase generata (5 parole da una wordlist) o scelta dall'utente, senza account
+  - Dominio del server configurabile da Impostazioni (campo libero, vuoto di default): vuoto usa lo stesso dominio che serve l'app (deploy web attuale), va valorizzato per l'app installata nativamente o se backend e frontend sono su domini diversi
   - La passphrase viene hashata (SHA-256) lato server e usata come nome file; non è vera autenticazione, chi conosce la passphrase ha accesso completo a quel backup
   - Un solo backup per passphrase, sempre sovrascritto (nessuno storico/versioning)
   - Alla sincronizzazione manuale, se locale e server differiscono, l'utente sceglie quale versione tenere (sovrascrive l'altra)

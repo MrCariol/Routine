@@ -17,6 +17,7 @@ Vue.component('settings-page', {
       hasKey: RoutineSync.hasPassphrase(),
       syncKeyValue: RoutineSync.getPassphrase(),
       lastSyncedAt: RoutineSync.getLastSyncedAt(),
+      serverUrlDraft: RoutineSync.getServerUrl(),
       showKeyInput: false,
       keyDraft: '',
       voiceSupported: !!(window.RoutineVoice && RoutineVoice.supported()),
@@ -56,6 +57,10 @@ Vue.component('settings-page', {
     dismissSuccess: function () { this.$emit('dismiss-success'); },
     dismissError: function () { this.$emit('dismiss-error'); },
 
+    saveServerUrl: function () {
+      RoutineSync.setServerUrl(this.serverUrlDraft.trim());
+      this.$root.checkSyncSilently();
+    },
     createSyncKey: function () {
       var key = RoutineSync.generatePassphrase();
       RoutineSync.setPassphrase(key);
@@ -159,6 +164,12 @@ Vue.component('settings-page', {
         '</ul>' +
 
         '<h6 class="font-weight-bold">Sincronizzazione online</h6>' +
+
+        '<div class="form-group">' +
+          '<label class="small text-muted mb-1" for="syncServerUrl">Server di sincronizzazione</label>' +
+          '<input type="text" class="form-control" id="syncServerUrl" placeholder="https://tuodominio.it" v-model="serverUrlDraft" @change="saveServerUrl">' +
+          '<small class="form-text text-muted">Lascia vuoto per usare lo stesso dominio che serve l\'app. Da compilare qui nell\'app installata (nessun dominio di default) o se backend e frontend sono su domini diversi.</small>' +
+        '</div>' +
 
         '<div v-if="!hasKey">' +
           '<p class="text-muted small">Salva un backup delle tue routine su un server, recuperabile anche da un altro dispositivo, senza bisogno di creare un account: basta una chiave.</p>' +

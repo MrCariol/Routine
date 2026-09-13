@@ -6,7 +6,7 @@
 window.RoutineSync = (function () {
   var KEY_STORAGE = 'routineApp.syncPassphrase';
   var LAST_SYNCED_AT_STORAGE = 'routineApp.lastSyncedAt';
-  var API_URL = 'api/sync.php';
+  var SERVER_URL_STORAGE = 'routineApp.syncServerUrl';
   var WORDS_COUNT = 5;
 
   function getPassphrase() {
@@ -20,6 +20,26 @@ window.RoutineSync = (function () {
   }
   function hasPassphrase() {
     return getPassphrase().length > 0;
+  }
+
+  // ---- Dominio del server di sincronizzazione (campo libero, opzionale) ----
+  // Vuoto di default: in quel caso si usa il path relativo 'api/sync.php',
+  // che funziona quando frontend e backend PHP condividono la stessa origine
+  // (il deploy web attuale). Va valorizzato quando i due sono su domini
+  // diversi o quando l'app gira nel wrapper nativo Capacitor, che non ha
+  // un'origine http coincidente con nessun server.
+  function getServerUrl() {
+    try { return window.localStorage.getItem(SERVER_URL_STORAGE) || ''; } catch (e) { return ''; }
+  }
+  function setServerUrl(url) {
+    try { window.localStorage.setItem(SERVER_URL_STORAGE, url || ''); } catch (e) {}
+  }
+  function buildApiUrl() {
+    var base = getServerUrl().trim();
+    if (!base) { return 'api/sync.php'; }
+    base = base.replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) { base = 'https://' + base; }
+    return base + '/api/sync.php';
   }
 
   function getLastSyncedAt() {
@@ -62,7 +82,7 @@ window.RoutineSync = (function () {
     }
 
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', API_URL, true);
+    xhr.open('POST', buildApiUrl(), true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.timeout = 15000;
     xhr.onload = function () {
@@ -100,6 +120,8 @@ window.RoutineSync = (function () {
     hasPassphrase: hasPassphrase,
     getLastSyncedAt: getLastSyncedAt,
     setLastSyncedAt: setLastSyncedAt,
+    getServerUrl: getServerUrl,
+    setServerUrl: setServerUrl,
     generatePassphrase: generatePassphrase,
     pull: pull,
     push: push
