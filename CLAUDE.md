@@ -77,6 +77,8 @@ FTP_SECURE=true
 ```
 `FTP_HOST`/`FTP_USER`/`FTP_PASS` obbligatori; `FTP_REMOTE_DIR` opzionale (vuoto = root FTP); `FTP_SECURE` opzionale (`true` = FTPS esplicita, default; `false` = FTP in chiaro, solo se l'host non la supporta). Il workflow maschera a mano i valori estratti nei log (GitHub maschera automaticamente solo l'intero blob del secret, non le singole righe).
 
+**TODO**: il secret `FTP_CONFIG` non è ancora stato creato sul repo GitHub — finché manca, questo workflow fallisce ad ogni push su `main` (nessun danno: fallisce prima di qualunque upload). Da fare alla prossima sessione.
+
 ## Sviluppo locale
 
 Server PHP locale già configurato in [.claude/launch.json](.claude/launch.json) (`php -S localhost:8090 -t .`) — necessario per testare la sync, non solo per servire i file statici. Non essendoci build step, per il solo frontend basta aprire `index.html` o servire la root con qualunque server statico.
