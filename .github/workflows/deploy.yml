@@ -8,6 +8,13 @@ name: Deploy
 # da "git ls-files". In particolare non tocca MAI api/data/*.json (i backup
 # degli utenti), che non sono tracciati da git (vedi .gitignore) e quindi non
 # compaiono mai in questa lista.
+#
+# Un solo secret (FTP_CONFIG) con tutti i parametri, una riga per campo:
+#   FTP_HOST=ftp.tuodominio.it
+#   FTP_USER=utente
+#   FTP_PASS=password
+#   FTP_REMOTE_DIR=/percorso/sul/server   (opzionale, vuoto = root FTP)
+#   FTP_SECURE=true                       (opzionale, default true = FTPS)
 
 on:
   push:
@@ -21,13 +28,33 @@ jobs:
 
       - name: Upload via FTP/FTPS
         env:
-          FTP_HOST: ${{ secrets.FTP_HOST }}
-          FTP_USER: ${{ secrets.FTP_USER }}
-          FTP_PASS: ${{ secrets.FTP_PASS }}
-          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-          FTP_SECURE: ${{ secrets.FTP_SECURE }}
+          FTP_CONFIG: ${{ secrets.FTP_CONFIG }}
         run: |
           set -euo pipefail
+
+          # ---- estrae i singoli campi da FTP_CONFIG (una riga "CHIAVE=valore" ciascuno) ----
+          while IFS='=' read -r key value; do
+            key="$(echo "$key" | xargs)"           # rimuove spazi attorno alla chiave
+            value="${value%$'\r'}"                  # tollera CRLF se il secret e' stato incollato da Windows
+            case "$key" in
+              FTP_HOST) FTP_HOST="$value" ;;
+              FTP_USER) FTP_USER="$value" ;;
+              FTP_PASS) FTP_PASS="$value" ;;
+              FTP_REMOTE_DIR) FTP_REMOTE_DIR="$value" ;;
+              FTP_SECURE) FTP_SECURE="$value" ;;
+            esac
+          done <<< "$FTP_CONFIG"
+
+          if [ -z "${FTP_HOST:-}" ] || [ -z "${FTP_USER:-}" ] || [ -z "${FTP_PASS:-}" ]; then
+            echo "FTP_CONFIG incompleto: servono almeno FTP_HOST, FTP_USER, FTP_PASS." >&2
+            exit 1
+          fi
+
+          # I valori estratti non sono mascherati automaticamente nei log
+          # (solo l'intero secret FTP_CONFIG lo e'): li mascheriamo a mano.
+          echo "::add-mask::${FTP_HOST}"
+          echo "::add-mask::${FTP_USER}"
+          echo "::add-mask::${FTP_PASS}"
 
           CURL_OPTS=(--silent --show-error --ftp-create-dirs)
           if [ "${FTP_SECURE:-true}" = "true" ]; then

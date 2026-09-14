@@ -67,7 +67,15 @@ Nessuna precache. Strategia per pattern URL: `api/*` sempre e solo rete (mai int
 
 `.github/workflows/deploy.yml` — ad ogni push su `main`, carica via FTP/FTPS (curl) tutti i file tracciati da git (esclusi `.github/`, `.gitignore`, `README.md`, `CLAUDE.md`), nella cartella indicata da `FTP_REMOTE_DIR`. Nessun build, nessuna estrazione lato server: essendo un sito statico + un unico PHP, basta l'upload diretto. Non cancella mai file sul server (solo upload/overwrite) — in particolare non tocca mai `api/data/*.json` (i backup degli utenti), che non essendo tracciati da git non compaiono mai nell'elenco caricato.
 
-Secret richiesti (repo GitHub → Settings → Secrets and variables → Actions): `FTP_HOST`, `FTP_USER`, `FTP_PASS`, `FTP_REMOTE_DIR` (percorso assoluto o relativo sul server, vuoto = root FTP), `FTP_SECURE` (`true` = FTPS esplicita, default; `false` = FTP in chiaro, solo se l'host non supporta FTPS).
+Un solo secret richiesto (repo GitHub → Settings → Secrets and variables → Actions): **`FTP_CONFIG`**, con tutti i parametri dentro, una riga per campo in formato `CHIAVE=valore`:
+```
+FTP_HOST=ftp.tuodominio.it
+FTP_USER=utente
+FTP_PASS=password
+FTP_REMOTE_DIR=/percorso/sul/server
+FTP_SECURE=true
+```
+`FTP_HOST`/`FTP_USER`/`FTP_PASS` obbligatori; `FTP_REMOTE_DIR` opzionale (vuoto = root FTP); `FTP_SECURE` opzionale (`true` = FTPS esplicita, default; `false` = FTP in chiaro, solo se l'host non la supporta). Il workflow maschera a mano i valori estratti nei log (GitHub maschera automaticamente solo l'intero blob del secret, non le singole righe).
 
 ## Sviluppo locale
 
