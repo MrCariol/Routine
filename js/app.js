@@ -25,12 +25,13 @@ var app = new Vue({
     resumeExecutionSession: null,
     routineSummaryPayload: null,
 
-    // Sincronizzazione online
+    // Sincronizzazione online (identita' via hub esterno, vedi js/auth.js)
     syncButtonState: 'neutral', // 'neutral' | 'checking' | 'ok' | 'warning'
     syncBusy: false,
     syncInfoMessage: '',
     syncInfoIsError: false,
     syncConflict: null, // { localModified, localCount, serverModified, serverCount, serverData }
+    authUser: null, // { id, name, email }, restituito dal backend dopo aver validato il token
 
     // Installazione PWA (bottone "Installa l'app" in home)
     deferredInstallPrompt: null,
@@ -138,14 +139,26 @@ var app = new Vue({
       this.syncInfoIsError = !!isError;
       $(this.$refs.syncInfoModal).modal('show');
     },
+    // Sessione scaduta/invalida (risposta 401 dal backend, vedi js/sync.js):
+    // disconnette l'utente qui, senza dover ripetere la stessa logica in
+    // ogni punto che chiama RoutineSync.pull/push.
+    handleSyncUnauthorized: function () {
+      RoutineAuth.logout();
+      this.authUser = null;
+      this.syncButtonState = 'neutral';
+    },
     // Confronto silenzioso, eseguito all'apertura dell'app: aggiorna solo il
     // colore del bottone, senza mostrare nulla all'utente.
     checkSyncSilently: function () {
       var self = this;
-      if (!RoutineSync.hasPassphrase()) { this.syncButtonState = 'neutral'; return; }
+      if (!RoutineAuth.isLoggedIn()) { this.syncButtonState = 'neutral'; return; }
       this.syncButtonState = 'checking';
       RoutineSync.pull(function (err, result) {
-        if (err) { self.syncButtonState = 'neutral'; return; }
+        if (err) {
+          if (err.unauthorized) { self.handleSyncUnauthorized(); } else { self.syncButtonState = 'neutral'; }
+          return;
+        }
+        if (result.user) { self.authUser = result.user; }
         if (!result.exists) { self.syncButtonState = 'warning'; return; }
         var same = JSON.stringify(self.data) === JSON.stringify(result.data);
         self.syncButtonState = same ? 'ok' : 'warning';
@@ -154,7 +167,7 @@ var app = new Vue({
     // Chiamato dal bottone "Sincronizza" in home: confronto reale e, se
     // servono decisioni, le chiede all'utente.
     syncNow: function () {
-      if (!RoutineSync.hasPassphrase()) {
+      if (!RoutineAuth.isLoggedIn()) {
         this.openSettings();
         return;
       }
@@ -163,10 +176,16 @@ var app = new Vue({
       RoutineSync.pull(function (err, result) {
         self.syncBusy = false;
         if (err) {
-          self.syncButtonState = 'neutral';
-          self.showSyncInfo('Impossibile contattare il server: ' + err.message, true);
+          if (err.unauthorized) {
+            self.handleSyncUnauthorized();
+            self.showSyncInfo('Sessione scaduta: accedi di nuovo dalle Impostazioni.', true);
+          } else {
+            self.syncButtonState = 'neutral';
+            self.showSyncInfo('Impossibile contattare il server: ' + err.message, true);
+          }
           return;
         }
+        if (result.user) { self.authUser = result.user; }
         if (!result.exists) {
           // Nessun backup ancora presente sul server: lo creiamo subito,
           // non c'e' nessuna vera scelta da fare in questo caso.
@@ -203,8 +222,12 @@ var app = new Vue({
     pushLocalToServer: function (callback) {
       var self = this;
       var modified = Date.now();
-      RoutineSync.push(this.data, modified, function (err) {
-        if (!err) { RoutineSync.setLastSyncedAt(Date.now()); }
+      RoutineSync.push(this.data, modified, function (err, result) {
+        if (err && err.unauthorized) { self.handleSyncUnauthorized(); }
+        if (!err) {
+          RoutineSync.setLastSyncedAt(Date.now());
+          if (result && result.user) { self.authUser = result.user; }
+        }
         if (callback) { callback(err); }
       });
     },
@@ -408,6 +431,10 @@ var app = new Vue({
   },
   created: function () {
     this.Store = Store;
+    // Va per primo: se l'URL contiene "#token=..." (ritorno dal login
+    // sull'hub di autenticazione configurato in Impostazioni) lo consuma e
+    // ripulisce subito l'URL. Vedi js/auth.js.
+    RoutineAuth.consumeCallbackToken();
     this.applyTheme();
     // Ogni modale Bootstrap crea automaticamente uno sfondo scuro (backdrop)
     // con priorita' piu' bassa dei popup dell'app: senza questo, lo sfondo

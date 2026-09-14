@@ -31,7 +31,7 @@
   Non serve modificare nient'altro: tutti i link/script sotto lo usano.
 -->
 <script>
-  var APP_VERSION = '2026081303';
+  var APP_VERSION = '2026091401';
   var savedTheme = 'light';
   try { savedTheme = window.localStorage.getItem('routineApp.theme') || 'light'; } catch (e) {}
   document.write('<link id="theme-stylesheet" rel="stylesheet" href="css/' + (savedTheme === 'dark' ? 'bootstrap-dark.min.css' : 'bootstrap.min.css') + '?v=' + APP_VERSION + '">');
@@ -259,7 +259,7 @@
   loadScript('js/sound.js');
   loadScript('js/voice.js');
   loadScript('js/notify.js');
-  loadScript('js/sync-wordlist.js');
+  loadScript('js/auth.js');
   loadScript('js/sync.js');
   loadScript('js/icons-data.js');
   loadScript('js/components/icon-picker.js');

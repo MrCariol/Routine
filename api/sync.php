@@ -2,27 +2,44 @@
 /**
  * api/sync.php
  *
- * Endpoint minimale per il backup/sincronizzazione online delle routine.
- * Nessuna vera autenticazione: la passphrase stessa fa da "chiave di
- * accesso" (chi la conosce puo' leggere/scrivere quel backup, nessun altro).
- * Un solo backup per passphrase, sempre sovrascritto (nessuno storico).
+ * Endpoint di sincronizzazione cloud del backup routine. Gestisce SOLO i
+ * dati dell'app (un blob JSON per utente): l'identita' e' sempre verificata
+ * parlando con l'hub di autenticazione, mai fidandosi di un uuid passato
+ * dal client.
+ *
+ * Il dominio dell'hub NON e' fisso: e' quello che l'utente ha inserito nel
+ * campo "Dominio hub di autenticazione" in Impostazioni (js/auth.js),
+ * inoltrato qui dal client ad ogni richiesta (campo "authDomain") cosi'
+ * chiunque ospiti un hub compatibile (es. MrCariol/auth-hub, self-hosted)
+ * puo' usarlo, non solo un'istanza predefinita. Compromesso di sicurezza
+ * accettato consapevolmente: questo endpoint si fida del dominio indicato
+ * dal client per DECIDERE CHI CHIAMARE, ma l'identita' resta comunque
+ * decisa dall'hub (che risponde con l'utente proprietario del token), mai
+ * dal client stesso - vedi validaTokenSuHub().
+ *
+ * Ogni richiesta porta un bearer token (header Authorization) ottenuto dal
+ * login sull'hub configurato. Questo endpoint lo valida chiamando
+ * https://<authDomain>/api/user lato server (mai il browser): niente
+ * problemi di CORS, e l'identita' dell'utente non e' mai decisa dal
+ * client, solo dall'hub.
  *
  * Richieste accettate: solo POST, corpo JSON.
- *   { "action": "pull", "passphrase": "..." }
- *   { "action": "push", "passphrase": "...", "data": {...}, "lastModified": 1234567890 }
+ *   { "action": "pull", "authDomain": "tuodominio.it" }
+ *   { "action": "push", "authDomain": "tuodominio.it", "data": {...}, "lastModified": 1234567890 }
  */
 
 header('Content-Type: application/json; charset=utf-8');
 
 // CORS: il dominio del server e' configurabile lato client (vedi
-// Impostazioni > Sincronizzazione online / js/sync.js), quindi la richiesta
-// e' spesso cross-origin (in particolare dal wrapper nativo Capacitor, che
-// non ha comunque un'origine http coincidente con nessun server). Non e'
-// un indebolimento della sicurezza rispetto a oggi: il modello e' gia'
-// "chi conosce la passphrase ha accesso", non basato su same-origin.
+// Impostazioni > Server di sincronizzazione / js/sync.js), quindi la
+// richiesta e' spesso cross-origin (in particolare dal wrapper nativo
+// Capacitor, che non ha comunque un'origine http coincidente con nessun
+// server). Non e' un indebolimento della sicurezza: l'identita' non dipende
+// dall'origine della richiesta ma dal bearer token, validato server-to-server
+// contro l'hub scelto (vedi sopra).
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
@@ -54,23 +71,119 @@ if (!is_array($input)) {
 }
 
 $action = isset($input['action']) ? $input['action'] : '';
-$passphrase = isset($input['passphrase']) ? $input['passphrase'] : '';
-
-if (!is_string($passphrase) || strlen($passphrase) < 8 || strlen($passphrase) > 300) {
-    respond(400, array('success' => false, 'error' => 'Passphrase non valida'));
+if ($action !== 'pull' && $action !== 'push') {
+    respond(400, array('success' => false, 'error' => 'Azione non riconosciuta'));
 }
 
-// La passphrase non viene mai usata direttamente come nome file: viene
-// prima trasformata con un hash a lunghezza fissa. Questo impedisce anche
-// solo in linea di principio qualsiasi tentativo di path traversal.
-$hash = hash('sha256', $passphrase);
+// ---------- estrazione del bearer token ----------
+// Su hosting condiviso con PHP via CGI/FastCGI l'header Authorization
+// spesso non arriva in $_SERVER senza un aiuto in .htaccess (vedi
+// api/.htaccess) - per questo si controllano piu' fonti possibili.
+function estraiAuthorizationHeader() {
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if ($headers !== false) {
+            foreach ($headers as $name => $value) {
+                if (strcasecmp($name, 'Authorization') === 0) {
+                    return $value;
+                }
+            }
+        }
+    }
+    if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+        return $_SERVER['HTTP_AUTHORIZATION'];
+    }
+    if (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        return $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    return null;
+}
+
+$authHeader = estraiAuthorizationHeader();
+if (!$authHeader || stripos($authHeader, 'Bearer ') !== 0) {
+    respond(401, array('success' => false, 'error' => 'Token mancante'));
+}
+$token = trim(substr($authHeader, 7));
+if ($token === '') {
+    respond(401, array('success' => false, 'error' => 'Token mancante'));
+}
+
+// ---------- dominio dell'hub, inviato dal client (vedi commento in testa) ----------
+// Validato con un pattern di hostname "normale" (niente schema/porta/
+// percorso/query, niente spazi): non elimina la possibilita' di puntare a
+// un hub arbitrario (e' voluto, vedi sopra), ma impedisce che il valore
+// finisca in un URL malformato o venga usato per altro che non sia un host.
+$authDomain = isset($input['authDomain']) ? trim((string) $input['authDomain']) : '';
+$hostnamePattern = '/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i';
+if ($authDomain === '' || !preg_match($hostnamePattern, $authDomain)) {
+    respond(400, array('success' => false, 'error' => 'Dominio hub di autenticazione mancante o non valido'));
+}
+
+// ---------- validazione del token contro l'hub di autenticazione ----------
+// Chiamata server-to-server: mai eseguita dal browser, quindi nessun
+// problema di CORS a prescindere dal dominio da cui gira questa app.
+// Restituisce l'array utente {id, name, email} oppure null se il token
+// non e' valido/scaduto o l'hub non risponde correttamente.
+function validaTokenSuHub($token, $authDomain) {
+    $url = 'https://' . $authDomain . '/api/user';
+    $headers = array(
+        'Authorization: Bearer ' . $token,
+        'Accept: application/json'
+    );
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        $body = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+    } else {
+        $context = stream_context_create(array(
+            'http' => array(
+                'method' => 'GET',
+                'header' => implode("\r\n", $headers),
+                'timeout' => 5,
+                'ignore_errors' => true
+            )
+        ));
+        $body = @file_get_contents($url, false, $context);
+        $status = 0;
+        if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
+            $status = (int) $m[1];
+        }
+    }
+
+    if ($body === false || $status !== 200) {
+        return null;
+    }
+
+    $user = json_decode($body, true);
+    if (!is_array($user) || empty($user['id']) || !preg_match('/^[0-9a-f-]{36}$/i', $user['id'])) {
+        return null;
+    }
+
+    return array(
+        'id' => $user['id'],
+        'name' => isset($user['name']) ? $user['name'] : '',
+        'email' => isset($user['email']) ? $user['email'] : ''
+    );
+}
+
+$user = validaTokenSuHub($token, $authDomain);
+if (!$user) {
+    respond(401, array('success' => false, 'error' => 'Sessione non valida, accedi di nuovo'));
+}
+
 $dataDir = __DIR__ . '/data';
-$filePath = $dataDir . '/' . $hash . '.json';
+$filePath = $dataDir . '/' . $user['id'] . '.json';
 
 if ($action === 'pull') {
 
     if (!file_exists($filePath)) {
-        respond(200, array('success' => true, 'exists' => false));
+        respond(200, array('success' => true, 'exists' => false, 'user' => $user));
     }
 
     $content = file_get_contents($filePath);
@@ -83,10 +196,11 @@ if ($action === 'pull') {
         'success' => true,
         'exists' => true,
         'lastModified' => isset($stored['lastModified']) ? $stored['lastModified'] : null,
-        'data' => isset($stored['data']) ? $stored['data'] : null
+        'data' => isset($stored['data']) ? $stored['data'] : null,
+        'user' => $user
     ));
 
-} elseif ($action === 'push') {
+} else { // push
 
     if (!isset($input['data']) || !is_array($input['data'])) {
         respond(400, array('success' => false, 'error' => 'Dati mancanti'));
@@ -116,8 +230,5 @@ if ($action === 'pull') {
         respond(500, array('success' => false, 'error' => 'Impossibile salvare sul server'));
     }
 
-    respond(200, array('success' => true, 'lastModified' => $lastModified));
-
-} else {
-    respond(400, array('success' => false, 'error' => 'Azione non riconosciuta'));
+    respond(200, array('success' => true, 'lastModified' => $lastModified, 'user' => $user));
 }

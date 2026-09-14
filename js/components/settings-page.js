@@ -1,6 +1,6 @@
 // components/settings-page.js
 // Pagina Impostazioni: tema chiaro/scuro, backup (esporta/importa),
-// sincronizzazione online (creazione/uso/disattivazione chiave).
+// sincronizzazione online (login/logout verso l'hub di autenticazione).
 // Struttura: header fisso (indietro + titolo), main scorrevole, footer vuoto.
 
 Vue.component('settings-page', {
@@ -14,12 +14,13 @@ Vue.component('settings-page', {
   },
   data: function () {
     return {
-      hasKey: RoutineSync.hasPassphrase(),
-      syncKeyValue: RoutineSync.getPassphrase(),
+      // valore iniziale "al meglio": RoutineAuth.consumeCallbackToken() gira
+      // nel created() di js/app.js, ben prima che l'utente possa arrivare
+      // qui aprendo Impostazioni, quindi a questo punto e' gia' affidabile
+      loggedIn: RoutineAuth.isLoggedIn(),
+      authHubDomainDraft: RoutineAuth.getHubDomain(),
       lastSyncedAt: RoutineSync.getLastSyncedAt(),
       serverUrlDraft: RoutineSync.getServerUrl(),
-      showKeyInput: false,
-      keyDraft: '',
       voiceSupported: !!(window.RoutineVoice && RoutineVoice.supported()),
       notifySupported: !!(window.RoutineNotify && RoutineNotify.supported()),
       notifyPermission: window.RoutineNotify ? RoutineNotify.permission() : 'unsupported'
@@ -61,39 +62,23 @@ Vue.component('settings-page', {
       RoutineSync.setServerUrl(this.serverUrlDraft.trim());
       this.$root.checkSyncSilently();
     },
-    createSyncKey: function () {
-      var key = RoutineSync.generatePassphrase();
-      RoutineSync.setPassphrase(key);
-      this.hasKey = true;
-      this.syncKeyValue = key;
-      this.lastSyncedAt = null;
-      this.$root.syncButtonState = 'warning';
+    saveAuthHubDomain: function () {
+      RoutineAuth.setHubDomain(this.authHubDomainDraft);
+      this.authHubDomainDraft = RoutineAuth.getHubDomain();
     },
-    confirmExistingKey: function () {
-      var trimmed = this.keyDraft.trim();
-      if (!trimmed) { return; }
-      RoutineSync.setPassphrase(trimmed);
-      this.hasKey = true;
-      this.syncKeyValue = trimmed;
-      this.showKeyInput = false;
-      this.keyDraft = '';
-      this.lastSyncedAt = RoutineSync.getLastSyncedAt();
-      this.$root.checkSyncSilently();
+    login: function () {
+      if (!this.authHubDomainDraft) { return; }
+      this.saveAuthHubDomain();
+      RoutineAuth.startLogin();
     },
-    copyKey: function () {
-      var input = this.$refs.syncKeyInput;
-      if (!input) { return; }
-      input.select();
-      try { document.execCommand('copy'); } catch (e) {}
-    },
-    disableSync: function () {
+    logout: function () {
       var self = this;
       this.$root.askConfirm(
-        'Disattivare la sincronizzazione su questo dispositivo? La chiave verr\u00e0 dimenticata qui, ma il backup sul server NON verr\u00e0 cancellato.',
+        'Disconnettersi da questo dispositivo? Il backup sul server NON verr\u00e0 cancellato: potrai ritrovarlo accedendo di nuovo con lo stesso account.',
         function () {
-          RoutineSync.clearPassphrase();
-          self.hasKey = false;
-          self.syncKeyValue = '';
+          RoutineAuth.logout();
+          self.loggedIn = false;
+          self.$root.authUser = null;
           self.$root.syncButtonState = 'neutral';
         }
       );
@@ -168,27 +153,23 @@ Vue.component('settings-page', {
         '<div class="form-group">' +
           '<label class="small text-muted mb-1" for="syncServerUrl">Server di sincronizzazione</label>' +
           '<input type="text" class="form-control" id="syncServerUrl" placeholder="https://tuodominio.it" v-model="serverUrlDraft" @change="saveServerUrl">' +
-          '<small class="form-text text-muted">Lascia vuoto per usare lo stesso dominio che serve l\'app. Da compilare qui nell\'app installata (nessun dominio di default) o se backend e frontend sono su domini diversi.</small>' +
+          '<small class="form-text text-muted">Dove sono salvati i backup (questo stesso sito, di solito). Lascia vuoto per usare lo stesso dominio che serve l\'app. Da compilare qui nell\'app installata (nessun dominio di default) o se backend e frontend sono su domini diversi.</small>' +
         '</div>' +
 
-        '<div v-if="!hasKey">' +
-          '<p class="text-muted small">Salva un backup delle tue routine su un server, recuperabile anche da un altro dispositivo, senza bisogno di creare un account: basta una chiave.</p>' +
-          '<button type="button" class="btn btn-outline-primary btn-block mb-2" @click="createSyncKey">Crea nuova chiave di sincronizzazione</button>' +
-          '<button type="button" class="btn btn-outline-secondary btn-block" @click="showKeyInput = !showKeyInput">Ho gi\u00e0 una chiave</button>' +
-          '<div class="input-group mt-2" v-if="showKeyInput">' +
-            '<input type="text" class="form-control" placeholder="parola-parola-parola-parola-parola" v-model="keyDraft">' +
-            '<div class="input-group-append"><button class="btn btn-outline-primary" type="button" @click="confirmExistingKey">Conferma</button></div>' +
+        '<div v-if="!loggedIn">' +
+          '<p class="text-muted small">L\'accesso avviene tramite un hub di autenticazione esterno (nessuna password gestita da quest\'app): indica il suo dominio, poi accedi. Puoi self-hostarne uno tuo (progetto <code>auth-hub</code>) o usarne uno di cui ti fidi.</p>' +
+          '<div class="form-group">' +
+            '<label class="small text-muted mb-1" for="authHubDomain">Dominio hub di autenticazione</label>' +
+            '<input type="text" class="form-control" id="authHubDomain" placeholder="es. auth.tuodominio.it" v-model.trim="authHubDomainDraft" @blur="saveAuthHubDomain" @keyup.enter="saveAuthHubDomain">' +
           '</div>' +
+          '<button type="button" class="btn btn-primary btn-block" @click="login" :disabled="!authHubDomainDraft">Accedi</button>' +
         '</div>' +
 
         '<div v-else>' +
-          '<div class="input-group mb-2">' +
-            '<input type="text" class="form-control" readonly :value="syncKeyValue" ref="syncKeyInput">' +
-            '<div class="input-group-append"><button class="btn btn-outline-secondary" type="button" @click="copyKey" title="Copia"><i class="mdi mdi-content-copy"></i></button></div>' +
-          '</div>' +
-          '<p class="text-muted small">Conserva questa chiave: \u00e8 l\'unico modo per ritrovare il backup da un altro dispositivo. Non condividerla con nessuno.</p>' +
+          '<p class="mb-1" v-if="$root.authUser">Connesso come <strong>{{ $root.authUser.name }}</strong><span class="d-block small text-muted">{{ $root.authUser.email }}</span></p>' +
+          '<p class="small text-muted mb-1">Hub di autenticazione: <strong>{{ authHubDomainDraft }}</strong></p>' +
           '<p class="text-muted small" v-if="lastSyncedLabel">Ultima sincronizzazione riuscita: {{ lastSyncedLabel }}</p>' +
-          '<button type="button" class="btn btn-outline-danger btn-block" @click="disableSync">Disattiva sincronizzazione su questo dispositivo</button>' +
+          '<button type="button" class="btn btn-outline-danger btn-block" @click="logout">Esci</button>' +
         '</div>' +
 
         '<p class="text-muted small mt-3">In futuro qui potranno comparire altre impostazioni.</p>' +

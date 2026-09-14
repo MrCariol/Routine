@@ -26,13 +26,13 @@ icons/                       icone app (favicon, touch icon, tile)
 js/app.js                    istanza Vue root, navigazione, sync, import/export
 js/models.js                 factory routine/task/subtask, calcolo durate e orari
 js/store.js                  persistenza localStorage, formattazione tempo, palette colori
-js/sync.js                   client sync verso api/sync.php (passphrase-based)
-js/sync-wordlist.js           wordlist per generare passphrase
+js/auth.js                    login verso un hub di autenticazione esterno (dominio a scelta dell'utente)
+js/sync.js                    client sync verso api/sync.php (identità via js/auth.js)
 js/sound.js                   beep via Web Audio API (nessun file audio)
 js/icons-data.js              elenco icone MDI selezionabili
 js/components/*.js            componenti Vue (una vista/funzione ciascuno)
-api/sync.php                  endpoint pull/push backup
-api/data/                     backup salvati (uno per passphrase, hash SHA-256 come nome file)
+api/sync.php                  endpoint pull/push backup (valida il token contro l'hub di autenticazione)
+api/data/                     backup salvati (uno per utente, UUID come nome file)
 ```
 
 ## Modello dati
@@ -72,10 +72,11 @@ Tutto salvato in `localStorage` sotto la chiave `routineApp.data.v1` come `{ rou
 
 ### Backup e sincronizzazione
 - **Export/Import manuale**: scarica/carica un file JSON con tutte le routine (l'import sovrascrive tutto, con conferma)
-- **Sync online opzionale**: basata su una passphrase generata (5 parole da una wordlist) o scelta dall'utente, senza account
-  - Dominio del server configurabile da Impostazioni (campo libero, vuoto di default): vuoto usa lo stesso dominio che serve l'app (deploy web attuale), va valorizzato per l'app installata nativamente o se backend e frontend sono su domini diversi
-  - La passphrase viene hashata (SHA-256) lato server e usata come nome file; non è vera autenticazione, chi conosce la passphrase ha accesso completo a quel backup
-  - Un solo backup per passphrase, sempre sovrascritto (nessuno storico/versioning)
+- **Sync online opzionale**: autenticazione tramite un hub esterno (compatibile con [MrCariol/auth-hub](https://github.com/MrCariol/auth-hub), self-hostabile), non un account gestito da quest'app
+  - In Impostazioni si indica il dominio dell'hub di autenticazione (campo libero, nessun default fisso: chiunque può ospitarne uno proprio) e si preme "Accedi": redirect all'hub, login/SSO silenzioso lì, ritorno con un token nel fragment dell'URL (`js/auth.js`)
+  - Il backup è identificato dall'UUID utente restituito dall'hub, non da una chiave scelta dall'utente: `api/sync.php` valida il token contro l'hub indicato (chiamata server-to-server, mai dal browser) prima di ogni lettura/scrittura
+  - Dominio del **server** di sincronizzazione (dove vive `api/sync.php`, non l'hub) configurabile separatamente da Impostazioni (campo libero, vuoto di default): vuoto usa lo stesso dominio che serve l'app (deploy web attuale), va valorizzato per l'app installata nativamente o se backend e frontend sono su domini diversi
+  - Un solo backup per utente, sempre sovrascritto (nessuno storico/versioning)
   - Alla sincronizzazione manuale, se locale e server differiscono, l'utente sceglie quale versione tenere (sovrascrive l'altra)
   - Controllo silenzioso all'avvio dell'app: colora l'icona di sync (verde se allineato, giallo se ci sono differenze) senza notifiche invasive
   - `api/data/` è protetta da `.htaccess` (accesso diretto negato, solo lo script PHP può leggerla/scriverla)
@@ -89,6 +90,6 @@ Tutto salvato in `localStorage` sotto la chiave `routineApp.data.v1` come `{ rou
 
 ## Note di sicurezza rilevanti
 
-- La sincronizzazione non ha un vero controllo d'accesso: è "security through obscurity" basata sulla segretezza della passphrase (min. 8 caratteri lato server, nessun limite di tentativi/rate-limiting sull'endpoint)
+- `api/sync.php` si fida del dominio hub indicato dal client per decidere **chi chiamare**, ma l'identità resta sempre decisa dall'hub stesso (risponde lui con l'utente proprietario del token): un client non può impersonare un altro utente indicando un hub compiacente, può solo scegliere quale hub usare per autenticarsi
 - Limite dimensione payload: 2 MB per richiesta
 - Nessuna cifratura dei dati salvati sul server: il backup è in chiaro sul filesystem

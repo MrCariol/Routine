@@ -12,6 +12,8 @@ var VOICE_KEY = 'routineApp.voiceEnabled';
 var NOTIFY_KEY = 'routineApp.notifyEnabled';
 var STATS_KEY = 'routineApp.stats.v1';
 var STATS_RETENTION_DAYS = 730;
+var AUTH_TOKEN_KEY = 'routineApp.authToken';
+var AUTH_HUB_DOMAIN_KEY = 'routineApp.authHubDomain';
 
 // 16 colori pensati per restare leggibili sia su tema chiaro che scuro
 var ICON_COLORS = [
@@ -175,6 +177,29 @@ var Store = {
   },
   saveNotifyEnabled: function (enabled) {
     try { window.localStorage.setItem(NOTIFY_KEY, enabled ? '1' : '0'); } catch (e) {}
+  },
+
+  // ---- Autenticazione verso un hub esterno (vedi js/auth.js) --------------
+  // Token Sanctum ottenuto dall'hub e dominio dell'hub stesso: entrambi
+  // scelti/impostati dall'utente in Impostazioni, mai fissi nel codice
+  // (chiunque puo' self-hostare un hub compatibile).
+  loadAuthToken: function () {
+    try { return window.localStorage.getItem(AUTH_TOKEN_KEY) || ''; } catch (e) { return ''; }
+  },
+  saveAuthToken: function (token) {
+    try { window.localStorage.setItem(AUTH_TOKEN_KEY, token); } catch (e) {}
+  },
+  clearAuthToken: function () {
+    try { window.localStorage.removeItem(AUTH_TOKEN_KEY); } catch (e) {}
+  },
+  loadAuthHubDomain: function () {
+    try { return window.localStorage.getItem(AUTH_HUB_DOMAIN_KEY) || ''; } catch (e) { return ''; }
+  },
+  saveAuthHubDomain: function (domain) {
+    try {
+      if (domain) { window.localStorage.setItem(AUTH_HUB_DOMAIN_KEY, domain); }
+      else { window.localStorage.removeItem(AUTH_HUB_DOMAIN_KEY); }
+    } catch (e) {}
   },
 
   // ---- Statistiche esecuzioni, aggregate per giorno -----------------------
