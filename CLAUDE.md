@@ -63,6 +63,12 @@ Nessuna precache. Strategia per pattern URL: `api/*` sempre e solo rete (mai int
 - Endpoint singolo, solo POST JSON, azioni `pull`/`push`. Limite payload 2 MB. `api/data/` è protetta da `.htaccess` (accesso diretto negato). Nessuna cifratura a riposo: i backup sono in chiaro sul filesystem.
 - Distinguere sempre due domini concettualmente diversi, entrambi configurabili dall'utente e potenzialmente diversi tra loro: il **server di sincronizzazione** (`RoutineSync.getServerUrl`/`setServerUrl`, dove vive `api/sync.php`) e l'**hub di autenticazione** (`RoutineAuth.getHubDomain`/`setHubDomain`, chi garantisce l'identità).
 
+## Deploy
+
+`.github/workflows/deploy.yml` — ad ogni push su `main`, carica via FTP/FTPS (curl) tutti i file tracciati da git (esclusi `.github/`, `.gitignore`, `README.md`, `CLAUDE.md`), nella cartella indicata da `FTP_REMOTE_DIR`. Nessun build, nessuna estrazione lato server: essendo un sito statico + un unico PHP, basta l'upload diretto. Non cancella mai file sul server (solo upload/overwrite) — in particolare non tocca mai `api/data/*.json` (i backup degli utenti), che non essendo tracciati da git non compaiono mai nell'elenco caricato.
+
+Secret richiesti (repo GitHub → Settings → Secrets and variables → Actions): `FTP_HOST`, `FTP_USER`, `FTP_PASS`, `FTP_REMOTE_DIR` (percorso assoluto o relativo sul server, vuoto = root FTP), `FTP_SECURE` (`true` = FTPS esplicita, default; `false` = FTP in chiaro, solo se l'host non supporta FTPS).
+
 ## Sviluppo locale
 
 Server PHP locale già configurato in [.claude/launch.json](.claude/launch.json) (`php -S localhost:8090 -t .`) — necessario per testare la sync, non solo per servire i file statici. Non essendoci build step, per il solo frontend basta aprire `index.html` o servire la root con qualunque server statico.

@@ -1,0 +1,52 @@
+name: Deploy
+
+# Nessun build step (vedi CLAUDE.md): il sito e' gia' pronto cosi' com'e' nel
+# repo. Ad ogni push su main, carica via FTP/FTPS solo i file tracciati da
+# git (esclusi quelli di sviluppo/CI sotto, mai committati o mai da servire).
+#
+# Non cancella mai nulla sul server: solo upload/overwrite dei file elencati
+# da "git ls-files". In particolare non tocca MAI api/data/*.json (i backup
+# degli utenti), che non sono tracciati da git (vedi .gitignore) e quindi non
+# compaiono mai in questa lista.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload via FTP/FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+          FTP_SECURE: ${{ secrets.FTP_SECURE }}
+        run: |
+          set -euo pipefail
+
+          CURL_OPTS=(--silent --show-error --ftp-create-dirs)
+          if [ "${FTP_SECURE:-true}" = "true" ]; then
+            FTP_URL="ftps://${FTP_HOST}"
+            CURL_OPTS+=(--ssl-reqd)
+          else
+            FTP_URL="ftp://${FTP_HOST}"
+          fi
+
+          REMOTE_DIR="${FTP_REMOTE_DIR#/}"
+          REMOTE_DIR="${REMOTE_DIR%/}"
+          if [ -n "$REMOTE_DIR" ]; then REMOTE_DIR="${REMOTE_DIR}/"; fi
+
+          # Solo i file effettivamente nel repo: esclude file di
+          # sviluppo/CI/doc che non vanno serviti sull'hosting pubblico.
+          git ls-files | grep -v -E '^(\.github/|\.gitignore$|README\.md$|CLAUDE\.md$)' | while IFS= read -r file; do
+            echo "Upload: $file"
+            curl "${CURL_OPTS[@]}" \
+              -u "${FTP_USER}:${FTP_PASS}" \
+              -T "$file" \
+              "${FTP_URL}/${REMOTE_DIR}${file}"
+          done
