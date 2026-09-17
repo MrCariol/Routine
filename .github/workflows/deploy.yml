@@ -56,12 +56,14 @@ jobs:
           echo "::add-mask::${FTP_USER}"
           echo "::add-mask::${FTP_PASS}"
 
+          # Nota: lo schema "ftps://" in curl forza la FTPS implicita (porta
+          # 990), che quasi nessun hosting condiviso espone. Per la FTPS
+          # esplicita (AUTH TLS, porta 21, la piu' comune) va usato lo
+          # schema "ftp://" insieme a --ssl-reqd.
           CURL_OPTS=(--silent --show-error --ftp-create-dirs)
+          FTP_URL="ftp://${FTP_HOST}"
           if [ "${FTP_SECURE:-true}" = "true" ]; then
-            FTP_URL="ftps://${FTP_HOST}"
             CURL_OPTS+=(--ssl-reqd)
-          else
-            FTP_URL="ftp://${FTP_HOST}"
           fi
 
           REMOTE_DIR="${FTP_REMOTE_DIR#/}"
