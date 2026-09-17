@@ -35,16 +35,24 @@
   ExpiresByType image/png "access plus 1 year"
 </IfModule>
 
-# SPA fallback: niente router lato client (vedi CLAUDE.md), un solo
-# index.html in root. Un hub di autenticazione puo' essere configurato per
-# reindirizzare su un path qualsiasi (es. /auth/callback#token=...): senza
-# questa regola quel path darebbe 404 e il token nel fragment non verrebbe
-# mai letto da js/auth.js. Non tocca api/ ne' i file statici esistenti,
-# solo i path che non corrispondono a un file o cartella reale.
+# Un hub di autenticazione puo' essere configurato per tornare su un path che
+# qui non esiste (es. /auth/callback#token=...), dove l'app non c'e': niente
+# router lato client, un solo index.html nella cartella dell'app (vedi
+# CLAUDE.md). Quel path viene quindi rimandato alla root con un redirect
+# esterno: il browser riporta da solo il fragment sull'URL di destinazione
+# (RFC 7231), cosi' js/auth.js trova "#token=..." e lo consuma.
+#
+# Serve un redirect e non un rewrite interno: index.html carica CSS/JS con
+# path relativi, quindi servirlo sotto /auth/ farebbe cercare gli script in
+# /auth/js/... e l'app resterebbe bloccata sul loader.
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /
+
+  # I file statici mancanti restano 404: non devono mai finire sulla root,
+  # verrebbero interpretati come CSS/JS e romperebbero il caricamento.
+  RewriteRule \.(css|js|json|xml|map|php|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|otf)$ - [NC,L]
+
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^ index.html [L]
+  RewriteRule ^ / [R=302,L]
 </IfModule>
