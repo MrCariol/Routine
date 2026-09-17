@@ -20,7 +20,6 @@ Vue.component('settings-page', {
       loggedIn: RoutineAuth.isLoggedIn(),
       authHubDomainDraft: RoutineAuth.getHubDomain(),
       lastSyncedAt: RoutineSync.getLastSyncedAt(),
-      serverUrlDraft: RoutineSync.getServerUrl(),
       voiceSupported: !!(window.RoutineVoice && RoutineVoice.supported()),
       notifySupported: !!(window.RoutineNotify && RoutineNotify.supported()),
       notifyPermission: window.RoutineNotify ? RoutineNotify.permission() : 'unsupported'
@@ -58,10 +57,6 @@ Vue.component('settings-page', {
     dismissSuccess: function () { this.$emit('dismiss-success'); },
     dismissError: function () { this.$emit('dismiss-error'); },
 
-    saveServerUrl: function () {
-      RoutineSync.setServerUrl(this.serverUrlDraft.trim());
-      this.$root.checkSyncSilently();
-    },
     saveAuthHubDomain: function () {
       RoutineAuth.setHubDomain(this.authHubDomainDraft);
       this.authHubDomainDraft = RoutineAuth.getHubDomain();
@@ -149,12 +144,6 @@ Vue.component('settings-page', {
         '</ul>' +
 
         '<h6 class="font-weight-bold">Sincronizzazione online</h6>' +
-
-        '<div class="form-group">' +
-          '<label class="small text-muted mb-1" for="syncServerUrl">Server di sincronizzazione</label>' +
-          '<input type="text" class="form-control" id="syncServerUrl" placeholder="https://tuodominio.it" v-model="serverUrlDraft" @change="saveServerUrl">' +
-          '<small class="form-text text-muted">Dove sono salvati i backup (questo stesso sito, di solito). Lascia vuoto per usare lo stesso dominio che serve l\'app. Da compilare qui nell\'app installata (nessun dominio di default) o se backend e frontend sono su domini diversi.</small>' +
-        '</div>' +
 
         '<div v-if="!loggedIn">' +
           '<p class="text-muted small">L\'accesso avviene tramite un hub di autenticazione esterno (nessuna password gestita da quest\'app): indica il suo dominio, poi accedi. Puoi self-hostarne uno tuo (progetto <code>auth-hub</code>) o usarne uno di cui ti fidi.</p>' +

@@ -23,27 +23,16 @@
  * problemi di CORS, e l'identita' dell'utente non e' mai decisa dal
  * client, solo dall'hub.
  *
+ * Il client chiama sempre questo endpoint sullo stesso dominio che serve
+ * l'app (path relativo 'api/sync.php', vedi js/sync.js): niente CORS, la
+ * richiesta e' sempre same-origin.
+ *
  * Richieste accettate: solo POST, corpo JSON.
  *   { "action": "pull", "authDomain": "tuodominio.it" }
  *   { "action": "push", "authDomain": "tuodominio.it", "data": {...}, "lastModified": 1234567890 }
  */
 
 header('Content-Type: application/json; charset=utf-8');
-
-// CORS: il dominio del server e' configurabile lato client (vedi
-// Impostazioni > Server di sincronizzazione / js/sync.js), quindi la
-// richiesta e' spesso cross-origin (in particolare dal wrapper nativo
-// Capacitor, che non ha comunque un'origine http coincidente con nessun
-// server). Non e' un indebolimento della sicurezza: l'identita' non dipende
-// dall'origine della richiesta ma dal bearer token, validato server-to-server
-// contro l'hub scelto (vedi sopra).
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
-}
 
 function respond($statusCode, $payload) {
     http_response_code($statusCode);

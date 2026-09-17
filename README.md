@@ -75,7 +75,7 @@ Tutto salvato in `localStorage` sotto la chiave `routineApp.data.v1` come `{ rou
 - **Sync online opzionale**: autenticazione tramite un hub esterno (compatibile con [MrCariol/auth-hub](https://github.com/MrCariol/auth-hub), self-hostabile), non un account gestito da quest'app
   - In Impostazioni si indica il dominio dell'hub di autenticazione (campo libero, nessun default fisso: chiunque può ospitarne uno proprio) e si preme "Accedi": redirect all'hub, login/SSO silenzioso lì, ritorno con un token nel fragment dell'URL (`js/auth.js`)
   - Il backup è identificato dall'UUID utente restituito dall'hub, non da una chiave scelta dall'utente: `api/sync.php` valida il token contro l'hub indicato (chiamata server-to-server, mai dal browser) prima di ogni lettura/scrittura
-  - Dominio del **server** di sincronizzazione (dove vive `api/sync.php`, non l'hub) configurabile separatamente da Impostazioni (campo libero, vuoto di default): vuoto usa lo stesso dominio che serve l'app (deploy web attuale), va valorizzato per l'app installata nativamente o se backend e frontend sono su domini diversi
+  - Il **backend** (`api/sync.php`) vive sempre sullo stesso dominio che serve l'app: il client lo chiama via path relativo, non c'è nulla da configurare (l'unico dominio configurabile è quello dell'hub di autenticazione)
   - Un solo backup per utente, sempre sovrascritto (nessuno storico/versioning)
   - Alla sincronizzazione manuale, se locale e server differiscono, l'utente sceglie quale versione tenere (sovrascrive l'altra)
   - Controllo silenzioso all'avvio dell'app: colora l'icona di sync (verde se allineato, giallo se ci sono differenze) senza notifiche invasive

@@ -4,37 +4,14 @@
 // si manda solo il bearer token ottenuto dal login, mai un uuid deciso dal
 // client.
 //
-// Resta distinto dal "server di sincronizzazione" (getServerUrl/setServerUrl
-// sotto): quello indica DOVE vive il backend api/sync.php di questa app
-// (rilevante per il wrapper nativo Capacitor, che non ha un'origine http
-// coincidente con nessun server, o quando frontend e backend sono su domini
-// diversi). Il dominio dell'hub di autenticazione (js/auth.js) e' invece
-// CHI garantisce l'identita' dell'utente: possono essere lo stesso host o
-// due host del tutto diversi.
+// Il backend vive sempre sullo stesso dominio che serve l'app (path relativo
+// 'api/sync.php'). Il dominio dell'hub di autenticazione (js/auth.js) e'
+// invece CHI garantisce l'identita' dell'utente, ed e' l'unico configurabile:
+// puo' essere lo stesso host o un host del tutto diverso.
 
 window.RoutineSync = (function () {
   var LAST_SYNCED_AT_STORAGE = 'routineApp.lastSyncedAt';
-  var SERVER_URL_STORAGE = 'routineApp.syncServerUrl';
-
-  // ---- Dominio del server di sincronizzazione (campo libero, opzionale) ----
-  // Vuoto di default: in quel caso si usa il path relativo 'api/sync.php',
-  // che funziona quando frontend e backend PHP condividono la stessa origine
-  // (il deploy web attuale). Va valorizzato quando i due sono su domini
-  // diversi o quando l'app gira nel wrapper nativo Capacitor, che non ha
-  // un'origine http coincidente con nessun server.
-  function getServerUrl() {
-    try { return window.localStorage.getItem(SERVER_URL_STORAGE) || ''; } catch (e) { return ''; }
-  }
-  function setServerUrl(url) {
-    try { window.localStorage.setItem(SERVER_URL_STORAGE, url || ''); } catch (e) {}
-  }
-  function buildApiUrl() {
-    var base = getServerUrl().trim();
-    if (!base) { return 'api/sync.php'; }
-    base = base.replace(/\/+$/, '');
-    if (!/^https?:\/\//i.test(base)) { base = 'https://' + base; }
-    return base + '/api/sync.php';
-  }
+  var API_URL = 'api/sync.php';
 
   function getLastSyncedAt() {
     try {
@@ -60,7 +37,7 @@ window.RoutineSync = (function () {
     }
 
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', buildApiUrl(), true);
+    xhr.open('POST', API_URL, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Authorization', 'Bearer ' + token);
     xhr.timeout = 15000;
@@ -101,8 +78,6 @@ window.RoutineSync = (function () {
   return {
     getLastSyncedAt: getLastSyncedAt,
     setLastSyncedAt: setLastSyncedAt,
-    getServerUrl: getServerUrl,
-    setServerUrl: setServerUrl,
     pull: pull,
     push: push
   };
